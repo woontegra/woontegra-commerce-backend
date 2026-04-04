@@ -26,7 +26,7 @@ export class CustomerController {
 
   getById = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const tenantId = req.user!.tenantId;
 
       const customer = await this.customerService.getById(id, tenantId);
@@ -64,7 +64,7 @@ export class CustomerController {
 
   update = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const tenantId = req.user!.tenantId;
 
       const customer = await this.customerService.update(id, req.body, tenantId);
@@ -80,7 +80,7 @@ export class CustomerController {
 
   delete = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const tenantId = req.user!.tenantId;
 
       await this.customerService.delete(id, tenantId);

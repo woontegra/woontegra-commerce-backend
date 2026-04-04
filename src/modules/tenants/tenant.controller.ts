@@ -47,7 +47,7 @@ export class TenantController {
 
   getById = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const tenant = await this.tenantService.getById(id);
 
       if (!tenant) {

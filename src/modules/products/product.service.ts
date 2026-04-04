@@ -1,5 +1,4 @@
 import prisma from '../../config/database';
-import { Prisma } from '@prisma/client';
 
 export class ProductService {
   async getAll(tenantId: string) {
@@ -21,7 +20,7 @@ export class ProductService {
     });
   }
 
-  async create(data: Prisma.ProductCreateInput, tenantId: string) {
+  async create(data: any, tenantId: string) {
     return prisma.product.create({
       data: {
         ...data,
@@ -35,7 +34,7 @@ export class ProductService {
     });
   }
 
-  async update(id: string, data: Prisma.ProductUpdateInput, tenantId: string) {
+  async update(id: string, data: any, tenantId: string) {
     return prisma.product.update({
       where: { id },
       data: {

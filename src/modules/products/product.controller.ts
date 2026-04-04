@@ -26,7 +26,7 @@ export class ProductController {
 
   getById = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const tenantId = req.user!.tenantId;
 
       const product = await this.productService.getById(id, tenantId);
@@ -64,7 +64,7 @@ export class ProductController {
 
   update = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const tenantId = req.user!.tenantId;
 
       const product = await this.productService.update(id, req.body, tenantId);
@@ -80,7 +80,7 @@ export class ProductController {
 
   delete = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const tenantId = req.user!.tenantId;
 
       await this.productService.delete(id, tenantId);
