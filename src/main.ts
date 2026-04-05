@@ -9,6 +9,7 @@ import productRoutes from './modules/products/product.routes';
 import customerRoutes from './modules/customers/customer.routes';
 import categoryRoutes from './modules/categories/category.routes';
 import orderRoutes from './modules/orders/order.routes';
+import settingsRoutes from './modules/settings/settings.routes';
 
 const app: Application = express();
 
@@ -30,6 +31,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.use(errorHandler);
 

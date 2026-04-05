@@ -21,6 +21,7 @@ model Tenant {
   categories Category[]
   orders    Order[]
   customers Customer[]
+  settings  Settings?
 
   @@map("tenants")
 }
@@ -158,4 +159,21 @@ model OrderItem {
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@map("order_items")
+}
+
+model Settings {
+  id           String   @id @default(uuid())
+  siteName     String   @default("My Store")
+  logo         String?
+  primaryColor String   @default("#3B82F6")
+  secondaryColor String? @default("#10B981")
+  currency     String   @default("USD")
+  language     String   @default("en")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenantId     String   @unique
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("settings")
 }

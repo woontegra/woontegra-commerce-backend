@@ -110,3 +110,21 @@ Authorization: Bearer YOUR_TOKEN_HERE
 ### Get Customer Orders (requires token)
 GET https://woontegra-commerce-backend-production.up.railway.app/api/orders/customer/CUSTOMER_ID
 Authorization: Bearer YOUR_TOKEN_HERE
+
+### Get Settings (requires token)
+GET https://woontegra-commerce-backend-production.up.railway.app/api/settings
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### Update Settings (requires token)
+PUT https://woontegra-commerce-backend-production.up.railway.app/api/settings
+Content-Type: application/json
+Authorization: Bearer YOUR_TOKEN_HERE
+
+{
+  "siteName": "Woontegra Store",
+  "logo": "https://example.com/logo.png",
+  "primaryColor": "#3B82F6",
+  "secondaryColor": "#10B981",
+  "currency": "TRY",
+  "language": "tr"
+}
