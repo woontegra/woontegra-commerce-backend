@@ -1,0 +1,112 @@
+### Health Check
+GET https://woontegra-commerce-backend-production.up.railway.app/health
+
+### Create Tenant
+POST https://woontegra-commerce-backend-production.up.railway.app/api/tenants
+Content-Type: application/json
+
+{
+  "name": "Woontegra Store",
+  "slug": "woontegra",
+  "domain": "woontegra.com"
+}
+
+### Register User
+POST https://woontegra-commerce-backend-production.up.railway.app/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "admin@woontegra.com",
+  "password": "Admin123!",
+  "firstName": "Admin",
+  "lastName": "User",
+  "tenantSlug": "woontegra"
+}
+
+### Login
+POST https://woontegra-commerce-backend-production.up.railway.app/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@woontegra.com",
+  "password": "Admin123!",
+  "tenantSlug": "woontegra"
+}
+
+### Get Products (requires token)
+GET https://woontegra-commerce-backend-production.up.railway.app/api/products
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### Create Product (requires token)
+POST https://woontegra-commerce-backend-production.up.railway.app/api/products
+Content-Type: application/json
+Authorization: Bearer YOUR_TOKEN_HERE
+
+{
+  "name": "Test Product",
+  "slug": "test-product",
+  "description": "Test product description",
+  "price": 99.99,
+  "stock": 100,
+  "sku": "TEST-001",
+  "images": ["https://example.com/image.jpg"],
+  "isActive": true
+}
+
+### Get Categories (requires token)
+GET https://woontegra-commerce-backend-production.up.railway.app/api/categories
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### Create Category (requires token)
+POST https://woontegra-commerce-backend-production.up.railway.app/api/categories
+Content-Type: application/json
+Authorization: Bearer YOUR_TOKEN_HERE
+
+{
+  "name": "Electronics",
+  "slug": "electronics",
+  "description": "Electronic products"
+}
+
+### Get Products by Category (requires token)
+GET https://woontegra-commerce-backend-production.up.railway.app/api/categories/CATEGORY_ID/products
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### Get Orders (requires token)
+GET https://woontegra-commerce-backend-production.up.railway.app/api/orders
+Authorization: Bearer YOUR_TOKEN_HERE
+
+### Create Order (requires token)
+POST https://woontegra-commerce-backend-production.up.railway.app/api/orders
+Content-Type: application/json
+Authorization: Bearer YOUR_TOKEN_HERE
+
+{
+  "customerId": "CUSTOMER_ID",
+  "notes": "Please deliver before 5 PM",
+  "items": [
+    {
+      "productId": "PRODUCT_ID",
+      "quantity": 2,
+      "price": 99.99
+    },
+    {
+      "productId": "PRODUCT_ID_2",
+      "quantity": 1,
+      "price": 49.99
+    }
+  ]
+}
+
+### Update Order Status (requires token)
+PATCH https://woontegra-commerce-backend-production.up.railway.app/api/orders/ORDER_ID
+Content-Type: application/json
+Authorization: Bearer YOUR_TOKEN_HERE
+
+{
+  "status": "PROCESSING"
+}
+
+### Get Customer Orders (requires token)
+GET https://woontegra-commerce-backend-production.up.railway.app/api/orders/customer/CUSTOMER_ID
+Authorization: Bearer YOUR_TOKEN_HERE

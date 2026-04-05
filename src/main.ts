@@ -7,6 +7,8 @@ import authRoutes from './modules/auth/auth.routes';
 import tenantRoutes from './modules/tenants/tenant.routes';
 import productRoutes from './modules/products/product.routes';
 import customerRoutes from './modules/customers/customer.routes';
+import categoryRoutes from './modules/categories/category.routes';
+import orderRoutes from './modules/orders/order.routes';
 
 const app: Application = express();
 
@@ -26,6 +28,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tenants', tenantRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/orders', orderRoutes);
 
 app.use(errorHandler);
 
