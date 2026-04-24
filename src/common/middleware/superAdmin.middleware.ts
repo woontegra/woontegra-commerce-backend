@@ -1,32 +1,41 @@
 import { Request, Response, NextFunction } from 'express';
-import { authenticate } from './authEnhanced';
-import { logger } from '../../config/logger';
 
-interface AuthRequest extends Request {
-  user?: { userId: string; tenantId: string; role: string; email: string };
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    tenantId?: string;
+    role: string;
+    email: string;
+  };
 }
 
-/**
- * Middleware chain: authenticate → verify SUPER_ADMIN role.
- * Usage: router.use(requireSuperAdmin);  or  router.get('/path', ...requireSuperAdmin, handler)
- */
-export const requireSuperAdmin = [
-  authenticate,
-  (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (req.user?.role !== 'SUPER_ADMIN') {
-      logger.warn({
-        message: 'Super admin access denied',
-        userId:  req.user?.userId,
-        role:    req.user?.role,
-        path:    req.path,
-        ip:      req.ip,
-      });
-      return res.status(403).json({
-        success: false,
-        message: 'Bu alana erişim yetkiniz bulunmamaktadır.',
-        code:    'SUPER_ADMIN_REQUIRED',
-      });
-    }
-    next();
-  },
-];
+export const requireSuperAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+
+  if (req.user.role !== 'SUPER_ADMIN' && req.user.role !== 'superadmin') {
+    res.status(403).json({ success: false, error: 'Super admin access required' });
+    return;
+  }
+
+  next();
+};
+
+export const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+
+  const allowedRoles = ['ADMIN', 'SUPER_ADMIN', 'admin', 'superadmin'];
+  if (!allowedRoles.includes(req.user.role)) {
+    res.status(403).json({ success: false, error: 'Admin access required' });
+    return;
+  }
+
+  next();
+};
+
+export default requireSuperAdmin;

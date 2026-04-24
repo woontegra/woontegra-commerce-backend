@@ -1,413 +1,437 @@
-import { Request, Response } from 'express';
+import { PrismaClient, PaymentStatus, PaymentMethod, SubscriptionPlan } from '@prisma/client';
 import { AppError } from '../../common/middleware/error.middleware';
-import prisma from '../../config/database';
-import { PlanMiddleware } from '../../common/middleware/plan.middleware';
-import crypto from 'crypto';
+import Stripe from 'stripe';
+import { logger } from '../../config/logger';
+
+const prisma = new PrismaClient();
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2024-06-20' as any,
+});
 
 interface PaymentRequest {
+  amount: number;
+  currency: string;
+  paymentMethod: PaymentMethod;
+  description?: string;
+  metadata?: Record<string, any>;
+}
+
+interface SubscriptionRequest {
   planId: string;
-  paymentMethodId: string;
+  paymentData: PaymentRequest;
   billingCycle: 'monthly' | 'yearly';
-  savePaymentMethod?: boolean;
-}
-
-interface IyzicoPaymentData {
-  token: string;
-  cardHolderName: string;
-  cardNumber: string;
-  expiryMonth: string;
-  expiryYear: string;
-  cvv: string;
-}
-
-interface BankTransferData {
-  accountHolder: string;
-  accountNumber: string;
-  bankName: string;
-  iban: string;
-  receipt: string;
 }
 
 export class PaymentService {
-  private static generateInvoiceNumber(): string {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `INV-${year}-${month}-${random}`;
-  }
-
-  static async processPayment(userId: string, paymentData: PaymentRequest) {
+  // Process payment
+  static async processPayment(userId: string, data: PaymentRequest) {
     try {
-      // Get user and plan details
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          subscriptions: {
-            include: { plan: true }
-          }
-        }
-      });
-
-      if (!user) {
-        throw new AppError('User not found', 404);
-      }
-
-      const currentSubscription = user.subscriptions[0];
-      if (!currentSubscription) {
-        throw new AppError('No active subscription found', 404);
-      }
-
-      const plan = currentSubscription.plan;
-      
-      // Calculate amount based on billing cycle
-      let amount = plan.price;
-      if (paymentData.billingCycle === 'yearly') {
-        amount = plan.price * 12 * 0.9; // 20% discount for yearly
-      }
-
-      // Create billing cycle
-      const billingCycle = await prisma.billingCycle.create({
-        data: {
-          userSubscriptionId: currentSubscription.id,
-          startDate: new Date(),
-          endDate: paymentData.billingCycle === 'yearly' 
-            ? new Date(new Date().setFullYear(new Date().getFullYear() + 1))
-            : new Date(new Date().setMonth(new Date().getMonth() + 1)),
-          amount,
-          currency: plan.currency,
-          status: 'pending'
-        }
-      });
-
-      // Process payment based on payment method
-      const paymentMethod = await prisma.paymentMethod.findUnique({
-        where: { id: paymentData.paymentMethodId }
-      });
-
-      if (!paymentMethod) {
-        throw new AppError('Payment method not found', 404);
-      }
-
       let paymentResult;
-      switch (paymentMethod.type) {
-        case 'iyzico':
-          paymentResult = await this.processIyzicoPayment(userId, amount, paymentData as IyzicoPaymentData);
+
+      switch (data.paymentMethod) {
+        case 'credit_card':
+          paymentResult = await this.processStripePayment(data);
           break;
         case 'bank_transfer':
-          paymentResult = await this.processBankTransfer(userId, amount, paymentData as BankTransferData);
+          paymentResult = await this.processBankTransfer(data);
           break;
-        case 'credit_card':
-          paymentResult = await this.processCreditCardPayment(userId, amount, paymentData);
+        case 'paypal':
+          paymentResult = await this.processPayPalPayment(data);
           break;
         default:
           throw new AppError('Unsupported payment method', 400);
       }
 
-      // Update billing cycle status
-      await prisma.billingCycle.update({
-        where: { id: billingCycle.id },
+      // Save payment record
+      const payment = await prisma.payment.create({
         data: {
-          status: paymentResult.success ? 'paid' : 'failed',
-          paymentMethodId: paymentData.paymentMethodId,
-          paymentProvider: paymentResult.provider,
-          transactionId: paymentResult.transactionId,
-          failureReason: paymentResult.error
-        }
+          userId,
+          amount: data.amount,
+          currency: data.currency,
+          status: paymentResult.status as PaymentStatus,
+          method: data.paymentMethod,
+          externalId: paymentResult.externalId,
+          description: data.description,
+          metadata: data.metadata || {},
+        },
       });
 
-      // Update subscription if payment successful
-      if (paymentResult.success) {
-        await prisma.userSubscription.update({
-          where: { id: currentSubscription.id },
-          data: {
-            status: 'active',
-            currentPeriodEnd: billingCycle.endDate
-          }
-        });
-
-        // Create invoice
-        await prisma.invoice.create({
-          data: {
-            invoiceNumber: this.generateInvoiceNumber(),
-            userSubscriptionId: currentSubscription.id,
-            amount,
-            currency: plan.currency,
-            status: 'paid',
-            dueDate: new Date(),
-            paidDate: new Date(),
-            items: JSON.stringify([
-              {
-                description: `${plan.name} Planı - ${paymentData.billingCycle === 'yearly' ? 'Yıllık' : 'Aylık'}`,
-                quantity: 1,
-                unitPrice: amount,
-                total: amount
-              }
-            ])
-          }
-        });
-      }
+      logger.info(`Payment processed: ${payment.id}`, { userId, amount: data.amount });
 
       return {
-        success: paymentResult.success,
-        billingCycleId: billingCycle.id,
-        invoiceId: paymentResult.success ? 'generated' : null,
-        error: paymentResult.error
+        success: true,
+        payment,
+        transactionId: paymentResult.externalId,
       };
-
     } catch (error) {
-      console.error('Payment processing failed:', error);
+      logger.error('Payment processing failed:', error);
       throw new AppError('Payment processing failed', 500);
     }
   }
 
-  private static async processIyzicoPayment(userId: string, amount: number, paymentData: IyzicoPaymentData) {
+  // Process Stripe payment
+  private static async processStripePayment(data: PaymentRequest) {
     try {
-      // Mock Iyzico API call
-      console.log('Processing Iyzico payment:', { amount, ...paymentData });
-      
-      // Simulate successful payment
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(data.amount * 100), // Convert to cents
+        currency: data.currency.toLowerCase(),
+        automatic_payment_methods: { enabled: true },
+        description: data.description,
+        metadata: data.metadata,
+      });
+
       return {
-        success: true,
-        provider: 'iyzico',
-        transactionId: `IYZ-${Date.now()}`
+        status: 'pending',
+        externalId: paymentIntent.id,
+        clientSecret: paymentIntent.client_secret,
       };
     } catch (error) {
-      return {
-        success: false,
-        error: 'Iyzico payment failed',
-        provider: 'iyzico'
-      };
+      logger.error('Stripe payment failed:', error);
+      throw new AppError('Stripe payment failed', 500);
     }
   }
 
-  private static async processBankTransfer(userId: string, amount: number, paymentData: BankTransferData) {
-    try {
-      // Mock bank transfer processing
-      console.log('Processing bank transfer:', { amount, ...paymentData });
-      
-      // Simulate successful payment
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      return {
-        success: true,
-        provider: 'bank',
-        transactionId: `BANK-${Date.now()}`
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: 'Bank transfer failed',
-        provider: 'bank'
-      };
-    }
+  // Process bank transfer
+  private static async processBankTransfer(data: PaymentRequest) {
+    // Bank transfer logic - generate reference number
+    const referenceNumber = `TRF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+    return {
+      status: 'pending',
+      externalId: referenceNumber,
+      instructions: `Please transfer ${data.amount} ${data.currency} to our bank account with reference: ${referenceNumber}`,
+    };
   }
 
-  private static async processCreditCardPayment(userId: string, amount: number, paymentData: any) {
-    try {
-      // Mock credit card processing
-      console.log('Processing credit card payment:', { amount, ...paymentData });
-      
-      // Simulate successful payment
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      return {
-        success: true,
-        provider: 'stripe',
-        transactionId: `CC-${Date.now()}`
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: 'Credit card payment failed',
-        provider: 'stripe'
-      };
-    }
+  // Process PayPal payment
+  private static async processPayPalPayment(data: PaymentRequest) {
+    // PayPal integration placeholder
+    const paypalOrderId = `PAYPAL-${Date.now()}`;
+
+    return {
+      status: 'pending',
+      externalId: paypalOrderId,
+      redirectUrl: `https://www.paypal.com/checkout?token=${paypalOrderId}`,
+    };
   }
 
-  static async savePaymentMethod(userId: string, paymentData: any) {
+  // Create subscription
+  static async createSubscription(userId: string, data: SubscriptionRequest) {
     try {
-      const paymentMethodData = {
-        type: paymentData.type,
-        provider: paymentData.provider,
-        token: paymentData.token,
-        lastFour: paymentData.lastFour,
-        expiryDate: paymentData.expiryDate,
-        isDefault: paymentData.isDefault || false
-      };
+      const plan = await prisma.subscriptionPlan.findUnique({
+        where: { id: data.planId },
+      });
 
-      // If setting as default, unset other defaults
-      if (paymentMethodData.isDefault) {
-        await prisma.paymentMethod.updateMany({
-          where: { 
-            userId,
-            isDefault: true 
-          },
-          data: { isDefault: false }
-        });
+      if (!plan) {
+        throw new AppError('Subscription plan not found', 404);
       }
 
-      const paymentMethod = await prisma.paymentMethod.create({
-        data: {
-          userId,
-          ...paymentMethodData
-        }
-      });
+      // Calculate price based on billing cycle
+      const price = data.billingCycle === 'yearly'
+        ? (plan.yearlyPrice || plan.monthlyPrice * 10)
+        : plan.monthlyPrice;
 
-      return {
-        success: true,
-        paymentMethod
-      };
-    } catch (error) {
-      console.error('Save payment method failed:', error);
-      throw new AppError('Failed to save payment method', 500);
-    }
-  }
-
-  static async getUserPaymentMethods(userId: string) {
-    try {
-      const paymentMethods = await prisma.paymentMethod.findMany({
-        where: { 
-          userId,
-          isActive: true 
-        },
-        orderBy: { isDefault: 'desc' }
-      });
-
-      return {
-        success: true,
-        paymentMethods
-      };
-    } catch (error) {
-      console.error('Get payment methods failed:', error);
-      throw new AppError('Failed to get payment methods', 500);
-    }
-  }
-
-  static async deletePaymentMethod(userId: string, paymentMethodId: string) {
-    try {
-      const paymentMethod = await prisma.paymentMethod.findUnique({
-        where: { id: paymentMethodId, userId }
-      });
-
-      if (!paymentMethod) {
-        throw new AppError('Payment method not found', 404);
-      }
-
-      await prisma.paymentMethod.delete({
-        where: { id: paymentMethodId }
-      });
-
-      return {
-        success: true,
-        message: 'Payment method deleted successfully'
-      };
-    } catch (error) {
-      console.error('Delete payment method failed:', error);
-      throw new AppError('Failed to delete payment method', 500);
-    }
-  }
-
-  static async getBillingHistory(userId: string) {
-    try {
-      const billingCycles = await prisma.billingCycle.findMany({
-        where: { 
-          userSubscription: {
-            userId
-          }
-        },
-        include: {
-          userSubscription: {
-            include: { plan: true }
-          }
-        },
-        paymentMethod: true
-      },
-      orderBy: { createdAt: 'desc' }
-      });
-
-      const invoices = await prisma.invoice.findMany({
-        where: { 
-          userSubscription: {
-            userId
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-
-      return {
-        success: true,
-        billingCycles,
-        invoices
-      };
-    } catch (error) {
-      console.error('Get billing history failed:', error);
-      throw new AppError('Failed to get billing history', 500);
-    }
-  }
-
-  static async upgradePlan(userId: string, planId: string, paymentData: PaymentRequest) {
-    try {
-      // Get target plan
-      const targetPlan = await prisma.subscriptionPlan.findUnique({
-        where: { id: planId }
-      });
-
-      if (!targetPlan) {
-        throw new AppError('Target plan not found', 404);
-      }
-
-      // Check if user has active subscription
-      const currentSubscription = await prisma.userSubscription.findFirst({
-        where: { 
-          userId,
-          status: 'active'
-        },
-        include: { plan: true }
-      });
-
-      if (currentSubscription) {
-        // Cancel current subscription
-        await prisma.userSubscription.update({
-          where: { id: currentSubscription.id },
-          data: {
-            status: 'cancelled',
-            cancelledAt: new Date()
-          }
-        });
-      }
-
-      // Process payment for new plan
+      // Process initial payment
       const paymentResult = await this.processPayment(userId, {
-        ...paymentData,
-        planId
+        ...data.paymentData,
+        amount: price,
+        description: `Subscription: ${plan.name} (${data.billingCycle})`,
+        metadata: {
+          planId: plan.id,
+          billingCycle: data.billingCycle,
+          type: 'subscription',
+        },
       });
 
       if (!paymentResult.success) {
         throw new AppError('Payment failed', 400);
       }
 
-      // Create new subscription
-      const newSubscription = await prisma.userSubscription.create({
+      // Create subscription
+      const now = new Date();
+      const endDate = new Date(now);
+      if (data.billingCycle === 'yearly') {
+        endDate.setFullYear(endDate.getFullYear() + 1);
+      } else {
+        endDate.setMonth(endDate.getMonth() + 1);
+      }
+
+      const subscription = await prisma.userSubscription.create({
         data: {
           userId,
-          planId,
+          planId: plan.id,
           status: 'active',
-          currentPeriodStart: new Date()
-        }
+          billingCycle: data.billingCycle,
+          price,
+          currency: plan.currency,
+          startDate: now,
+          endDate,
+          paymentId: paymentResult.payment.id,
+          nextBillingDate: endDate,
+        },
+      });
+
+      logger.info(`Subscription created: ${subscription.id}`, { userId, planId: plan.id });
+
+      return {
+        success: true,
+        subscription,
+        payment: paymentResult.payment,
+      };
+    } catch (error) {
+      logger.error('Subscription creation failed:', error);
+      throw error;
+    }
+  }
+
+  // Cancel subscription
+  static async cancelSubscription(userId: string, subscriptionId: string) {
+    try {
+      const subscription = await prisma.userSubscription.findFirst({
+        where: { id: subscriptionId, userId },
+      });
+
+      if (!subscription) {
+        throw new AppError('Subscription not found', 404);
+      }
+
+      if (subscription.status !== 'active') {
+        throw new AppError('Subscription is not active', 400);
+      }
+
+      const updatedSubscription = await prisma.userSubscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: 'cancelled',
+          cancelledAt: new Date(),
+        },
+      });
+
+      logger.info(`Subscription cancelled: ${subscriptionId}`, { userId });
+
+      return {
+        success: true,
+        subscription: updatedSubscription,
+      };
+    } catch (error) {
+      logger.error('Subscription cancellation failed:', error);
+      throw error;
+    }
+  }
+
+  // Get payment history
+  static async getPaymentHistory(userId: string, options: { limit?: number; offset?: number } = {}) {
+    try {
+      const { limit = 10, offset = 0 } = options;
+
+      const [payments, total] = await Promise.all([
+        prisma.payment.findMany({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+        prisma.payment.count({ where: { userId } }),
+      ]);
+
+      return {
+        success: true,
+        payments,
+        total,
+        limit,
+        offset,
+      };
+    } catch (error) {
+      logger.error('Get payment history failed:', error);
+      throw new AppError('Failed to get payment history', 500);
+    }
+  }
+
+  // Get billing history
+  static async getBillingHistory(userId: string) {
+    try {
+      const billingCycles = await prisma.billingCycle.findMany({
+        where: {
+          userSubscription: {
+            userId,
+          },
+        },
+        include: {
+          userSubscription: {
+            include: { plan: true },
+          },
+          paymentMethod: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const invoices = await prisma.invoice.findMany({
+        where: {
+          userSubscription: {
+            userId,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
       });
 
       return {
         success: true,
-        subscription: newSubscription,
-        billingCycleId: paymentResult.billingCycleId,
-        invoiceId: paymentResult.invoiceId
+        billingCycles,
+        invoices,
       };
     } catch (error) {
-      console.error('Plan upgrade failed:', error);
-      throw new AppError('Plan upgrade failed', 500);
+      logger.error('Get billing history failed:', error);
+      throw new AppError('Failed to get billing history', 500);
     }
   }
+
+  // Upgrade plan
+  static async upgradePlan(userId: string, planId: string, paymentData: PaymentRequest) {
+    try {
+      const targetPlan = await prisma.subscriptionPlan.findUnique({
+        where: { id: planId },
+      });
+
+      if (!targetPlan) {
+        throw new AppError('Target plan not found', 404);
+      }
+
+      const currentSubscription = await prisma.userSubscription.findFirst({
+        where: {
+          userId,
+          status: 'active',
+        },
+        include: { plan: true },
+      });
+
+      if (!currentSubscription) {
+        throw new AppError('No active subscription found', 400);
+      }
+
+      // Calculate prorated amount
+      const now = new Date();
+      const daysRemaining = Math.max(0, Math.ceil((currentSubscription.endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      const totalDays = currentSubscription.billingCycle === 'yearly' ? 365 : 30;
+      const dailyRate = currentSubscription.price / totalDays;
+      const remainingValue = dailyRate * daysRemaining;
+
+      const newPlanPrice = paymentData.amount;
+      const upgradeCost = Math.max(0, newPlanPrice - remainingValue);
+
+      // Process upgrade payment
+      const paymentResult = await this.processPayment(userId, {
+        ...paymentData,
+        amount: upgradeCost,
+        description: `Plan upgrade: ${currentSubscription.plan.name} → ${targetPlan.name}`,
+        metadata: {
+          type: 'upgrade',
+          fromPlanId: currentSubscription.planId,
+          toPlanId: targetPlan.id,
+          proratedCredit: remainingValue,
+        },
+      });
+
+      if (!paymentResult.success) {
+        throw new AppError('Upgrade payment failed', 400);
+      }
+
+      // Cancel current subscription
+      await prisma.userSubscription.update({
+        where: { id: currentSubscription.id },
+        data: {
+          status: 'upgraded',
+          endDate: now,
+        },
+      });
+
+      // Create new subscription
+      const endDate = new Date(now);
+      if (currentSubscription.billingCycle === 'yearly') {
+        endDate.setFullYear(endDate.getFullYear() + 1);
+      } else {
+        endDate.setMonth(endDate.getMonth() + 1);
+      }
+
+      const newSubscription = await prisma.userSubscription.create({
+        data: {
+          userId,
+          planId: targetPlan.id,
+          status: 'active',
+          billingCycle: currentSubscription.billingCycle,
+          price: newPlanPrice,
+          currency: targetPlan.currency,
+          startDate: now,
+          endDate,
+          paymentId: paymentResult.payment.id,
+          nextBillingDate: endDate,
+        },
+      });
+
+      logger.info(`Plan upgraded: ${userId} → ${targetPlan.name}`, { userId, planId });
+
+      return {
+        success: true,
+        subscription: newSubscription,
+        payment: paymentResult.payment,
+        previousSubscription: currentSubscription,
+      };
+    } catch (error) {
+      logger.error('Plan upgrade failed:', error);
+      throw error;
+    }
+  }
+
+  // Webhook handler for Stripe
+  static async handleStripeWebhook(payload: any, signature: string) {
+    try {
+      const event = stripe.webhooks.constructEvent(
+        payload,
+        signature,
+        process.env.STRIPE_WEBHOOK_SECRET || ''
+      );
+
+      logger.info(`Stripe webhook received: ${event.type}`, { eventId: event.id });
+
+      switch (event.type) {
+        case 'payment_intent.succeeded':
+          await this.handlePaymentSuccess(event.data.object);
+          break;
+        case 'payment_intent.payment_failed':
+          await this.handlePaymentFailure(event.data.object);
+          break;
+        case 'invoice.payment_succeeded':
+          await this.handleInvoicePaymentSuccess(event.data.object);
+          break;
+        default:
+          logger.info(`Unhandled Stripe event: ${event.type}`);
+      }
+
+      return { received: true };
+    } catch (error) {
+      logger.error('Stripe webhook handling failed:', error);
+      throw new AppError('Webhook handling failed', 400);
+    }
+  }
+
+  private static async handlePaymentSuccess(paymentIntent: any) {
+    await prisma.payment.updateMany({
+      where: { externalId: paymentIntent.id },
+      data: { status: 'completed' },
+    });
+  }
+
+  private static async handlePaymentFailure(paymentIntent: any) {
+    await prisma.payment.updateMany({
+      where: { externalId: paymentIntent.id },
+      data: { status: 'failed' },
+    });
+  }
+
+  private static async handleInvoicePaymentSuccess(invoice: any) {
+    // Handle subscription invoice payment
+    logger.info(`Invoice payment succeeded: ${invoice.id}`);
+  }
 }
+
+export default PaymentService;
