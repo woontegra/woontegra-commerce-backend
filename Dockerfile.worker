@@ -1,0 +1,17 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy built files
+COPY dist ./dist
+
+# Set environment
+ENV NODE_ENV=production
+ENV WORKER_TYPE=all
+
+# Run worker
+CMD ["node", "dist/worker.js"]

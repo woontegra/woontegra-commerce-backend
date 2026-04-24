@@ -1,0 +1,809 @@
+
+> woontegra-backend@1.0.0 dev
+> ts-node-dev --respawn --transpile-only src/main.ts
+
+[INFO] 16:45:06 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 6.0.2)
+◇ injecting env (15) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+2026-04-08 16:45:10 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 16:45:10 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 16:45:11 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 16:45:11 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 6700                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 16:45:11 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":6700}
+2026-04-08 16:45:11 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 16:45:11 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 16:45:11 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 16:45:11 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 16:45:12 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 16:45:13 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 16:45:13 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 16:45:14 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 16:45:16 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+2026-04-08 16:45:41:4541 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:46:11:4611 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:46:41:4641 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:47:11:4711 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:47:41:4741 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:48:11:4811 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:48:41:4841 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:49:11:4911 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:49:41:4941 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:50:11:5011 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:50:41:5041 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:51:11:5111 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:51:41:5141 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:52:11:5211 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:52:41:5241 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:53:11:5311 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:53:41:5341 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:54:11:5411 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:54:41:5441 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:55:11:5511 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:55:41:5541 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:56:11:5611 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:56:41:5641 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:57:11:5711 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:57:41:5741 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:58:11:5811 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:58:41:5841 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:59:11:5911 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 16:59:41:5941 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:00:11:011 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:00:41:041 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:01:11:111 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:01:41:141 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:02:11:211 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:02:41:241 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:03:11:311 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:03:41:341 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:04:11:411 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:04:41:441 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:05:11:511 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:05:41:541 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:06:11:611 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:06:41:641 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:07:11:711 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:07:41:741 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:08:11:811 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:08:41:841 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:09:11:911 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:09:41:941 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:10:11:1011 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:10:41:1041 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:11:11:1111 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:11:41:1141 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:12:11:1211 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:12:41:1241 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:13:11:1311 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:13:41:1341 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:14:11:1411 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:14:41:1441 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:15:11:1511 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:15:41:1541 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:16:11:1611 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:16:41:1641 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:17:11:1711 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:17:41:1741 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:18:11:1811 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:18:41:1841 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:19:11:1911 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:19:41:1941 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:20:11:2011 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:20:41:2041 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:21:11:2111 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:21:41:2141 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:22:11:2211 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:22:41:2241 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:23:11:2311 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:23:41:2341 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:24:11:2411 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:24:41:2441 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:25:11:2511 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:25:41:2541 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:26:11:2611 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:26:41:2641 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:27:11:2711 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:27:41:2741 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:28:11:2811 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:28:41:2841 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:29:11:2911 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:29:41:2941 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:30:11:3011 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:30:41:3041 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:31:11:3111 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:31:41:3141 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:32:11:3211 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:32:41:3241 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:33:11:3311 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:33:41:3341 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:34:11:3411 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:34:41:3441 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:35:11:3511 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:35:41:3541 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:36:11:3611 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:36:41:3641 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:37:11:3711 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:37:41:3741 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:38:11:3811 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:38:41:3841 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:39:11:3911 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:39:41:3941 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:40:11:4011 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:40:41:4041 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:41:11:4111 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:41:41:4141 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:42:11:4211 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:42:41:4241 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:43:11:4311 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:43:41:4341 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:44:11:4411 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:44:41:4441 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:45:11:4511 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:45:41:4541 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:46:12:4612 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:46:42:4642 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:47:12:4712 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:47:42:4742 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:48:12:4812 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:48:42:4842 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:49:12:4912 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:49:42:4942 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:50:12:5012 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:50:42:5042 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:51:12:5112 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:51:42:5142 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:52:12:5212 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:52:42:5242 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:53:12:5312 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:53:42:5342 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:54:12:5412 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:54:42:5442 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:55:12:5512 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:55:42:5542 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:56:12:5612 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:56:42:5642 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:57:12:5712 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:57:42:5742 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:58:12:5812 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:58:42:5842 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:59:12:5912 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 17:59:42:5942 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:00:12:012 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:00:42:042 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:01:12:112 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:01:42:142 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:02:12:212 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:02:42:242 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:03:12:312 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:03:42:342 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:04:12:412 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:04:42:442 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:05:12:512 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:05:42:542 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:06:12:612 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:06:42:642 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:07:12:712 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:07:42:742 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:08:12:812 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:08:42:842 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:09:12:912 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:09:42:942 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:10:12:1012 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:10:42:1042 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:11:12:1112 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:11:42:1142 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:12:12:1212 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:12:42:1242 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:13:12:1312 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:13:42:1342 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:14:12:1412 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:14:42:1442 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:15:12:1512 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:15:42:1542 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:16:12:1612 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:16:42:1642 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:17:12:1712 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:17:42:1742 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:18:12:1812 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:18:42:1842 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:19:12:1912 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:19:42:1942 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:20:12:2012 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:20:42:2042 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:21:12:2112 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:21:42:2142 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:22:12:2212 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:22:42:2242 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:23:12:2312 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:23:42:2342 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:24:12:2412 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:24:42:2442 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:25:12:2512 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:25:42:2542 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:26:12:2612 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:26:42:2642 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:27:12:2712 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:27:42:2742 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:28:12:2812 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:28:42:2842 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:29:12:2912 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:29:42:2942 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:30:12:3012 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:30:42:3042 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:31:12:3112 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:31:42:3142 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:32:12:3212 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:32:42:3242 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:33:12:3312 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:33:42:3342 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:34:12:3412 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:34:42:3442 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:35:12:3512 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:35:42:3542 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:36:12:3612 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:36:42:3642 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:37:12:3712 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:37:42:3742 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:38:12:3812 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:38:42:3842 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:39:12:3912 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:39:42:3942 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:40:12:4012 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:40:42:4042 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:41:12:4112 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:41:42:4142 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:42:12:4212 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:42:42:4242 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:43:12:4312 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:43:42:4342 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:44:12:4412 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:44:42:4442 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:45:12:4512 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:45:42:4542 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:46:12:4612 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:46:42:4642 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:47:12:4712 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:47:42:4742 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:48:12:4812 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:48:42:4842 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:49:13:4913 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:49:43:4943 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:50:13:5013 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:50:43:5043 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:51:13:5113 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:51:43:5143 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:52:13:5213 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:52:43:5243 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:53:13:5313 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:53:43:5343 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:54:13:5413 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:54:43:5443 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:55:13:5513 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:55:43:5543 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:56:13:5613 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:56:43:5643 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:57:13:5713 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:57:43:5743 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:58:13:5813 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:58:43:5843 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:59:13:5913 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 18:59:43:5943 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:00:13:013 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:00:43:043 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:01:13:113 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:01:43:143 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:02:13:213 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:02:43:243 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:03:13:313 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:03:43:343 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:04:13:413 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:04:31:431 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /] [method: GET]
+prisma:query SELECT "public"."settings"."id", "public"."settings"."siteName", "public"."settings"."logo", "public"."settings"."logoUrl", "public"."settings"."faviconUrl", "public"."settings"."primaryColor", "public"."settings"."secondaryColor", "public"."settings"."accentColor", "public"."settings"."fontFamily", "public"."settings"."borderRadius", "public"."settings"."customCss", "public"."settings"."currency", "public"."settings"."language", "public"."settings"."createdAt", "public"."settings"."updatedAt", "public"."settings"."tenantId" FROM "public"."settings" WHERE ("public"."settings"."tenantId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-04-08 19:04:35:435 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /] [method: GET]
+prisma:query SELECT "public"."settings"."id", "public"."settings"."siteName", "public"."settings"."logo", "public"."settings"."logoUrl", "public"."settings"."faviconUrl", "public"."settings"."primaryColor", "public"."settings"."secondaryColor", "public"."settings"."accentColor", "public"."settings"."fontFamily", "public"."settings"."borderRadius", "public"."settings"."customCss", "public"."settings"."currency", "public"."settings"."language", "public"."settings"."createdAt", "public"."settings"."updatedAt", "public"."settings"."tenantId" FROM "public"."settings" WHERE ("public"."settings"."tenantId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-04-08 19:04:43:443 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:05:13:513 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:05:17:517 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /] [method: GET]
+prisma:query SELECT 1
+prisma:query SELECT "public"."settings"."id", "public"."settings"."siteName", "public"."settings"."logo", "public"."settings"."logoUrl", "public"."settings"."faviconUrl", "public"."settings"."primaryColor", "public"."settings"."secondaryColor", "public"."settings"."accentColor", "public"."settings"."fontFamily", "public"."settings"."borderRadius", "public"."settings"."customCss", "public"."settings"."currency", "public"."settings"."language", "public"."settings"."createdAt", "public"."settings"."updatedAt", "public"."settings"."tenantId" FROM "public"."settings" WHERE ("public"."settings"."tenantId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-04-08 19:05:19:519 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /stats] [method: GET]
+2026-04-08 19:05:19:519 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /unread-count] [method: GET]
+2026-04-08 19:05:20:520 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /] [method: GET]
+prisma:query SELECT "public"."trendyol_integrations"."id", "public"."trendyol_integrations"."supplierId", "public"."trendyol_integrations"."apiKey", "public"."trendyol_integrations"."apiSecret", "public"."trendyol_integrations"."isActive", "public"."trendyol_integrations"."lastSync", "public"."trendyol_integrations"."categoryMappings", "public"."trendyol_integrations"."attributeMappings", "public"."trendyol_integrations"."createdAt", "public"."trendyol_integrations"."updatedAt", "public"."trendyol_integrations"."tenantId" FROM "public"."trendyol_integrations" WHERE "public"."trendyol_integrations"."tenantId" = $1 LIMIT $2 OFFSET $3
+2026-04-08 19:05:22:522 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /unread-count] [method: GET]
+prisma:query SELECT "public"."settings"."id", "public"."settings"."siteName", "public"."settings"."logo", "public"."settings"."logoUrl", "public"."settings"."faviconUrl", "public"."settings"."primaryColor", "public"."settings"."secondaryColor", "public"."settings"."accentColor", "public"."settings"."fontFamily", "public"."settings"."borderRadius", "public"."settings"."customCss", "public"."settings"."currency", "public"."settings"."language", "public"."settings"."createdAt", "public"."settings"."updatedAt", "public"."settings"."tenantId" FROM "public"."settings" WHERE ("public"."settings"."tenantId" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-04-08 19:05:43:543 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:05:48:548 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /unread-count] [method: GET]
+2026-04-08 19:06:13:613 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:06:18:618 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /unread-count] [method: GET]
+2026-04-08 19:06:39:639 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /local-categories] [method: GET]
+2026-04-08 19:06:39:639 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /category-mapping] [method: GET]
+2026-04-08 19:06:39:639 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /trendyol-categories] [method: GET]
+prisma:query SELECT 1
+prisma:query SELECT 1
+2026-04-08 19:06:40:640 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /local-attributes] [method: GET]
+2026-04-08 19:06:40:640 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /attribute-mapping] [method: GET]
+prisma:query SELECT "public"."categories"."id", "public"."categories"."name", "public"."categories"."path", "public"."categories"."level", "public"."categories"."parentId" FROM "public"."categories" WHERE "public"."categories"."tenantId" = $1 ORDER BY "public"."categories"."path" ASC OFFSET $2
+prisma:query SELECT "public"."trendyol_integrations"."id", "public"."trendyol_integrations"."supplierId", "public"."trendyol_integrations"."apiKey", "public"."trendyol_integrations"."apiSecret", "public"."trendyol_integrations"."isActive", "public"."trendyol_integrations"."lastSync", "public"."trendyol_integrations"."categoryMappings", "public"."trendyol_integrations"."attributeMappings", "public"."trendyol_integrations"."createdAt", "public"."trendyol_integrations"."updatedAt", "public"."trendyol_integrations"."tenantId" FROM "public"."trendyol_integrations" WHERE "public"."trendyol_integrations"."tenantId" = $1 LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."trendyol_integrations"."id", "public"."trendyol_integrations"."supplierId", "public"."trendyol_integrations"."apiKey", "public"."trendyol_integrations"."apiSecret", "public"."trendyol_integrations"."isActive", "public"."trendyol_integrations"."lastSync", "public"."trendyol_integrations"."categoryMappings", "public"."trendyol_integrations"."attributeMappings", "public"."trendyol_integrations"."createdAt", "public"."trendyol_integrations"."updatedAt", "public"."trendyol_integrations"."tenantId" FROM "public"."trendyol_integrations" WHERE "public"."trendyol_integrations"."tenantId" = $1 LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."attributes"."id", "public"."attributes"."name", "public"."attributes"."type" FROM "public"."attributes" WHERE "public"."attributes"."tenantId" = $1 OFFSET $2
+2026-04-08 19:06:40:640 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /products] [method: GET]
+prisma:query SELECT "public"."attribute_values"."id", "public"."attribute_values"."label", "public"."attribute_values"."attributeId" FROM "public"."attribute_values" WHERE "public"."attribute_values"."attributeId" IN ($1,$2,$3) OFFSET $4
+prisma:query BEGIN
+2026-04-08 19:06:41:641 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /products] [method: GET]
+prisma:query ROLLBACK
+prisma:error Cannot read properties of undefined (reading 'value')
+prisma:error 
+Invalid `prisma.product.findMany()` invocation in
+C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\trendyol\trendyol.service.ts:211:22
+
+  208 
+  209 const [total, products] = await prisma.$transaction([
+  210   prisma.product.count({ where }),
+→ 211   prisma.product.findMany({
+          where: {
+            tenantId: "fb3097d5-746c-446f-ae3c-310b7732f643"
+          },
+          skip: 0,
+          take: 20,
+          orderBy: {
+            createdAt: "desc"
+          },
+          include: {
+            pricing: {
+              select: {
+                salePrice: true,
+                discountPrice: true
+              }
+            },
+            category: {
+              select: {
+                id: true,
+                name: true
+              }
+            },
+            stock: {
+              select: {
+                quantity: true
+              }
+            },
+            productImages: {
+              select: {
+                url: true
+              },
+              take: 1,
+              orderBy: {
+                displayOrder: "asc",
+                ~~~~~~~~~~~~
+        ?       id?: SortOrder,
+        ?       productId?: SortOrder,
+        ?       url?: SortOrder,
+        ?       order?: SortOrder,
+        ?       isMain?: SortOrder,
+        ?       alt?: SortOrder | SortOrderInput,
+        ?       createdAt?: SortOrder,
+        ?       product?: ProductOrderByWithRelationInput
+              }
+            },
+            trendyolMaps: {
+              select: {
+                batchId: true,
+                trendyolStatus: true,
+                lastSyncAt: true,
+                errorMessage: true
+              }
+            }
+          }
+        })
+
+Unknown argument `displayOrder`. Available options are marked with ?.
+prisma:query SELECT "public"."trendyol_integrations"."id", "public"."trendyol_integrations"."supplierId", "public"."trendyol_integrations"."apiKey", "public"."trendyol_integrations"."apiSecret", "public"."trendyol_integrations"."isActive", "public"."trendyol_integrations"."lastSync", "public"."trendyol_integrations"."categoryMappings", "public"."trendyol_integrations"."attributeMappings", "public"."trendyol_integrations"."createdAt", "public"."trendyol_integrations"."updatedAt", "public"."trendyol_integrations"."tenantId" FROM "public"."trendyol_integrations" WHERE "public"."trendyol_integrations"."tenantId" = $1 LIMIT $2 OFFSET $3
+prisma:query BEGIN
+2026-04-08 19:06:41:641 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /sync-history] [method: GET]
+prisma:query ROLLBACK
+prisma:error Cannot read properties of undefined (reading 'value')
+prisma:error 
+Invalid `prisma.product.findMany()` invocation in
+C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\trendyol\trendyol.service.ts:211:22
+
+  208 
+  209 const [total, products] = await prisma.$transaction([
+  210   prisma.product.count({ where }),
+→ 211   prisma.product.findMany({
+          where: {
+            tenantId: "fb3097d5-746c-446f-ae3c-310b7732f643",
+            trendyolMaps: {
+              some: {}
+            }
+          },
+          skip: 0,
+          take: 200,
+          orderBy: {
+            createdAt: "desc"
+          },
+          include: {
+            pricing: {
+              select: {
+                salePrice: true,
+                discountPrice: true
+              }
+            },
+            category: {
+              select: {
+                id: true,
+                name: true
+              }
+            },
+            stock: {
+              select: {
+                quantity: true
+              }
+            },
+            productImages: {
+              select: {
+                url: true
+              },
+              take: 1,
+              orderBy: {
+                displayOrder: "asc",
+                ~~~~~~~~~~~~
+        ?       id?: SortOrder,
+        ?       productId?: SortOrder,
+        ?       url?: SortOrder,
+        ?       order?: SortOrder,
+        ?       isMain?: SortOrder,
+        ?       alt?: SortOrder | SortOrderInput,
+        ?       createdAt?: SortOrder,
+        ?       product?: ProductOrderByWithRelationInput
+              }
+            },
+            trendyolMaps: {
+              select: {
+                batchId: true,
+                trendyolStatus: true,
+                lastSyncAt: true,
+                errorMessage: true
+              }
+            }
+          }
+        })
+
+Unknown argument `displayOrder`. Available options are marked with ?.
+prisma:query SELECT "public"."trendyol_integrations"."id", "public"."trendyol_integrations"."supplierId", "public"."trendyol_integrations"."apiKey", "public"."trendyol_integrations"."apiSecret", "public"."trendyol_integrations"."isActive", "public"."trendyol_integrations"."lastSync", "public"."trendyol_integrations"."categoryMappings", "public"."trendyol_integrations"."attributeMappings", "public"."trendyol_integrations"."createdAt", "public"."trendyol_integrations"."updatedAt", "public"."trendyol_integrations"."tenantId" FROM "public"."trendyol_integrations" WHERE "public"."trendyol_integrations"."tenantId" = $1 LIMIT $2 OFFSET $3
+2026-04-08 19:06:43:643 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:06:48:648 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /unread-count] [method: GET]
+2026-04-08 19:07:13:713 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:07:18:718 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /unread-count] [method: GET]
+2026-04-08 19:07:43:743 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+[INFO] 19:07:45 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\products\product.routes.ts has been modified
+◇ injecting env (15) from .env // tip: ⌘ enable debugging { debug: true }
+2026-04-08 19:07:47 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 19:07:47 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 19:07:47 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 19:07:47 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 24028                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 19:07:47 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":24028}
+2026-04-08 19:07:47 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 19:07:47 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 19:07:47 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:07:47 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:07:48 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:07:48 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:07:49 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:07:50 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 19:07:50 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:07:53 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+[INFO] 19:07:57 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\products\product.routes.ts has been modified
+◇ injecting env (15) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+2026-04-08 19:07:59 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 19:07:59 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 19:07:59 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 19:07:59 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 21396                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 19:07:59 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":21396}
+2026-04-08 19:07:59 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 19:07:59 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 19:07:59 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:07:59 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:08:00 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:08:00 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:08:01 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:08:02 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 19:08:02 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 19:08:04 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+2026-04-08 19:08:29:829 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:08:59:859 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:09:29:929 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:09:59:959 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:10:29:1029 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:10:59:1059 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:11:29:1129 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:11:59:1159 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:12:29:1229 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:12:59:1259 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:13:29:1329 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:13:59:1359 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:14:29:1429 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:14:59:1459 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:15:29:1529 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:15:59:1559 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:16:29:1629 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:16:59:1659 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:17:29:1729 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:17:59:1759 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:18:29:1829 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:18:59:1859 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:19:29:1929 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:19:59:1959 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:20:29:2029 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:20:59:2059 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:21:29:2129 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:21:59:2159 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:22:29:2229 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:22:59:2259 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:23:29:2329 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:23:59:2359 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:24:29:2429 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:24:59:2459 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:25:29:2529 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:25:59:2559 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:26:29:2629 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:26:59:2659 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:27:29:2729 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:27:59:2759 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:28:29:2829 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:28:59:2859 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:29:29:2929 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:29:59:2959 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:30:29:3029 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:30:59:3059 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:31:29:3129 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:31:59:3159 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:32:29:3229 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:32:59:3259 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:33:29:3329 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:33:59:3359 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:34:29:3429 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:34:59:3459 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:35:29:3529 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:35:59:3559 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:36:29:3629 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:36:59:3659 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:37:29:3729 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:37:59:3759 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:38:29:3829 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:38:59:3859 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:39:29:3929 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:39:59:3959 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:40:29:4029 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:40:59:4059 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:41:29:4129 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:41:59:4159 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:42:29:4229 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:42:59:4259 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:43:29:4329 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:43:59:4359 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:44:29:4429 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:44:59:4459 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:45:29:4529 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:45:59:4559 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:46:29:4629 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:46:59:4659 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:47:30:4730 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:48:00:480 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:48:30:4830 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:49:00:490 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:49:30:4930 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:50:00:500 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:50:30:5030 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:51:00:510 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:51:30:5130 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:52:00:520 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:52:30:5230 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:53:00:530 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:53:30:5330 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:54:00:540 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:54:30:5430 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:55:00:550 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:55:30:5530 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:56:00:560 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:56:30:5630 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:57:00:570 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:57:30:5730 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:58:00:580 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:58:30:5830 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:59:00:590 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 19:59:30:5930 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:00:00:00 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:00:30:030 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:01:00:10 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:01:30:130 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:02:00:20 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:02:30:230 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:03:00:30 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:03:30:330 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:04:00:40 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:04:30:430 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:05:00:50 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:05:30:530 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:06:00:60 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:06:30:630 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:07:00:70 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:07:30:730 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:08:00:80 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:08:30:830 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:09:00:90 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:09:30:930 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:10:00:100 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:10:30:1030 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:11:00:110 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:11:30:1130 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:12:00:120 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:12:30:1230 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:13:00:130 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:13:30:1330 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:14:00:140 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:14:30:1430 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:15:00:150 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:15:30:1530 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:16:00:160 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:16:30:1630 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:17:00:170 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:17:30:1730 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:18:00:180 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:18:30:1830 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:19:00:190 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:19:30:1930 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:20:00:200 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:20:30:2030 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:21:00:210 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:21:30:2130 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:22:00:220 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:22:30:2230 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:23:00:230 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:23:30:2330 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:24:00:240 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:24:30:2430 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:25:00:250 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:25:30:2530 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:26:00:260 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:26:30:2630 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:27:00:270 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:27:30:2730 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:28:00:280 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:28:30:2830 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:29:00:290 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:29:30:2930 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:30:00:300 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:30:30:3030 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:31:00:310 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:31:30:3130 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:32:00:320 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:32:30:3230 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:33:00:330 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:33:30:3330 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:34:00:340 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:34:30:3430 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:35:00:350 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:35:30:3530 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:36:00:360 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:36:30:3630 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:37:00:370 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:37:30:3730 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:38:00:380 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:38:30:3830 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:39:01:391 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:39:31:3931 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:40:01:401 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:40:31:4031 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:41:01:411 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:41:31:4131 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:42:01:421 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:42:31:4231 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:43:01:431 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:43:31:4331 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:44:01:441 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:44:31:4431 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:45:01:451 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:45:31:4531 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:46:01:461 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:46:31:4631 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:47:01:471 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:47:31:4731 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:48:01:481 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:48:31:4831 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:49:01:491 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:49:31:4931 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:50:01:501 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:50:31:5031 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:51:01:511 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:51:31:5131 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:52:01:521 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:52:31:5231 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:53:01:531 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:53:31:5331 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:54:01:541 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:54:31:5431 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:55:01:551 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:55:31:5531 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:56:01:561 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:56:31:5631 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:57:01:571 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:57:31:5731 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:58:01:581 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:58:31:5831 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:59:01:591 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 20:59:31:5931 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:00:01:01 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:00:31:031 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:01:01:11 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:01:31:131 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:02:01:21 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:02:31:231 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:03:01:31 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:03:31:331 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:04:01:41 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:04:31:431 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:05:01:51 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:05:31:531 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:06:01:61 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:06:31:631 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+[INFO] 21:06:50 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\products\xml-export.controller.ts has been modified
+◇ injecting env (15) from .env // tip: ⌘ suppress logs { quiet: true }
+2026-04-08 21:06:51 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 21:06:51 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 21:06:51 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 21:06:51 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 11228                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 21:06:51 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":11228}
+2026-04-08 21:06:51 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 21:06:51 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 21:06:51 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:06:51 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:06:52 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:06:52 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:06:53 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:06:54 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 21:06:54 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:06:57 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+2026-04-08 21:07:21:721 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m

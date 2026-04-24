@@ -1,93 +1,80 @@
 import { Response } from 'express';
 import { AuthRequest } from '../../common/middleware/auth.middleware';
 import { CustomerService } from './customer.service';
-import { AppError } from '../../common/middleware/error.middleware';
 
 export class CustomerController {
-  private customerService: CustomerService;
-
-  constructor() {
-    this.customerService = new CustomerService();
-  }
+  private svc = new CustomerService();
 
   getAll = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user!.tenantId;
-      const customers = await this.customerService.getAll(tenantId);
-
-      res.status(200).json({
-        status: 'success',
-        data: customers,
+      const tenantId = req.user!.tenantId!;
+      const result   = await this.svc.getAll(tenantId, {
+        page:   req.query.page   as any,
+        limit:  req.query.limit  as any,
+        search: req.query.search as string,
       });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch customers' });
+      res.status(200).json({ status: 'success', data: result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? 'Müşteriler alınamadı.' });
     }
   };
 
   getById = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const id = req.params.id as string;
-      const tenantId = req.user!.tenantId;
-
-      const customer = await this.customerService.getById(id, tenantId);
-
+      const tenantId = req.user!.tenantId!;
+      const customer = await this.svc.getById(req.params.id, tenantId);
       if (!customer) {
-        throw new AppError('Customer not found', 404);
+        res.status(404).json({ error: 'Müşteri bulunamadı.' });
+        return;
       }
-
-      res.status(200).json({
-        status: 'success',
-        data: customer,
-      });
-    } catch (error) {
-      if (error instanceof AppError) {
-        res.status(error.statusCode).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: 'Failed to fetch customer' });
-      }
+      res.status(200).json({ status: 'success', data: customer });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? 'Müşteri alınamadı.' });
     }
   };
 
   create = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user!.tenantId;
-      const customer = await this.customerService.create(req.body, tenantId);
-
-      res.status(201).json({
-        status: 'success',
-        data: customer,
-      });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to create customer' });
+      const tenantId = req.user!.tenantId!;
+      const customer = await this.svc.create(req.body, tenantId);
+      res.status(201).json({ status: 'success', data: customer });
+    } catch (err: any) {
+      const isDup = err.message?.includes('zaten kayıtlı');
+      res.status(isDup ? 409 : 500).json({ error: err.message ?? 'Müşteri oluşturulamadı.' });
     }
   };
 
   update = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const id = req.params.id as string;
-      const tenantId = req.user!.tenantId;
-
-      const customer = await this.customerService.update(id, req.body, tenantId);
-
-      res.status(200).json({
-        status: 'success',
-        data: customer,
-      });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to update customer' });
+      const tenantId = req.user!.tenantId!;
+      const customer = await this.svc.update(req.params.id, req.body, tenantId);
+      res.status(200).json({ status: 'success', data: customer });
+    } catch (err: any) {
+      const is404  = err.message?.includes('bulunamadı');
+      const is409  = err.message?.includes('başka bir müşteri');
+      const status = is404 ? 404 : is409 ? 409 : 500;
+      res.status(status).json({ error: err.message ?? 'Güncelleme başarısız.' });
     }
   };
 
   delete = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const id = req.params.id as string;
-      const tenantId = req.user!.tenantId;
-
-      await this.customerService.delete(id, tenantId);
-
+      const tenantId = req.user!.tenantId!;
+      await this.svc.delete(req.params.id, tenantId);
       res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to delete customer' });
+    } catch (err: any) {
+      const is404 = err.message?.includes('bulunamadı');
+      res.status(is404 ? 404 : 500).json({ error: err.message ?? 'Silme başarısız.' });
+    }
+  };
+
+  getStats = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const stats    = await this.svc.getStats(tenantId);
+      res.status(200).json({ status: 'success', data: stats });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? 'İstatistikler alınamadı.' });
     }
   };
 }

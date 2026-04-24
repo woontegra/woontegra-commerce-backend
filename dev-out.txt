@@ -1,0 +1,271 @@
+[INFO] 14:36:23 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 6.0.2)
+◇ injecting env (15) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+2026-04-08 14:36:27 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 14:36:27 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 14:36:27 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 14:36:27 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 7388                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 14:36:27 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":7388}
+2026-04-08 14:36:27 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 14:36:28 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 14:36:28 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:36:28 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:36:28 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:36:29 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:36:30 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:36:30 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 14:36:31 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:36:33 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+2026-04-08 14:36:57:3657 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:37:27:3727 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:37:57:3757 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:38:27:3827 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+[INFO] 14:38:34 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\customers\customer.service.ts has been modified
+◇ injecting env (15) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+2026-04-08 14:38:35 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 14:38:35 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 14:38:35 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 14:38:35 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 25636                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 14:38:35 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":25636}
+2026-04-08 14:38:35 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 14:38:35 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 14:38:35 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:35 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:36 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:36 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:37 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:38 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 14:38:38 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:41 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+[INFO] 14:38:50 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\customers\customer.controller.ts has been modified
+◇ injecting env (15) from .env // tip: ⌘ enable debugging { debug: true }
+2026-04-08 14:38:51 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 14:38:51 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 14:38:52 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 14:38:52 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 15236                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 14:38:52 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":15236}
+2026-04-08 14:38:52 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 14:38:52 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 14:38:52 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:52 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:52 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:53 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:54 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:54 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 14:38:55 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:38:57 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+[INFO] 14:39:06 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\customers\customer.routes.ts has been modified
+◇ injecting env (15) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+2026-04-08 14:39:07 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 14:39:07 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 14:39:07 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 14:39:07 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 31136                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 14:39:07 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":31136}
+2026-04-08 14:39:07 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 14:39:07 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 14:39:07 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:39:08 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:39:08 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:39:09 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:39:10 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:39:10 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 14:39:11 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:39:13 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+2026-04-08 14:39:37:3937 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:40:07:407 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:40:37:4037 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:41:07:417 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:41:37:4137 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:42:07:427 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:42:37:4237 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:43:07:437 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:43:37:4337 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:44:07:447 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+[INFO] 14:44:17 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\orders\order.service.ts has been modified
+◇ injecting env (15) from .env // tip: ⌘ enable debugging { debug: true }
+2026-04-08 14:44:18 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 14:44:18 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 14:44:18 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 14:44:18 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 4996                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 14:44:18 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":4996}
+2026-04-08 14:44:18 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 14:44:18 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 14:44:18 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:18 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:19 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:19 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:20 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:21 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 14:44:21 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:24 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+[INFO] 14:44:26 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\orders\order.controller.ts has been modified
+◇ injecting env (15) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+2026-04-08 14:44:27 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 14:44:27 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 14:44:27 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 14:44:27 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 20688                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 14:44:27 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":20688}
+2026-04-08 14:44:27 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 14:44:27 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 14:44:27 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:28 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:28 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:29 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:29 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:30 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 14:44:30 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:33 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+[INFO] 14:44:34 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\orders\order.controller.ts has been modified
+◇ injecting env (15) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+2026-04-08 14:44:36 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 14:44:36 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 14:44:36 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 14:44:36 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 28108                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 14:44:36 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":28108}
+2026-04-08 14:44:36 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 14:44:36 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 14:44:36 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:36 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:37 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:37 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:38 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:39 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 14:44:39 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:41 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+[INFO] 14:44:43 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\orders\order.controller.ts has been modified
+◇ injecting env (15) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+2026-04-08 14:44:44 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 14:44:44 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 14:44:44 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 14:44:44 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 3476                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 14:44:44 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":3476}
+2026-04-08 14:44:44 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 14:44:45 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 14:44:45 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:45 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:45 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:46 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:47 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:47 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 14:44:48 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:50 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+[INFO] 14:44:51 Restarting: C:\Users\Mercan Danışmanl\Desktop\woontegra-commerce\backend\src\modules\orders\order.controller.ts has been modified
+◇ injecting env (15) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+2026-04-08 14:44:53 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 14:44:53 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 14:44:53 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 14:44:53 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 22720                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 14:44:53 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":22720}
+2026-04-08 14:44:53 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 14:44:53 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 14:44:53 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:53 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:53 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:54 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:55 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:55 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 14:44:56 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 14:44:58 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+2026-04-08 14:45:23:4523 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:45:53:4553 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:46:23:4623 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:46:53:4653 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 14:47:23:4723 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m

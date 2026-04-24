@@ -1,19 +1,16 @@
 import { Router } from 'express';
 import { OrderController } from './order.controller';
-import { authMiddleware } from '../../common/middleware/auth.middleware';
-import { tenantMiddleware } from '../../common/middleware/tenant.middleware';
 
+// Auth + tenant guard is applied globally in main.ts for /api/orders
 const router = Router();
-const orderController = new OrderController();
+const ctrl   = new OrderController();
 
-router.use(authMiddleware);
-router.use(tenantMiddleware);
-
-router.get('/', orderController.getAll);
-router.get('/:id', orderController.getById);
-router.post('/', orderController.create);
-router.patch('/:id', orderController.updateStatus);
-router.delete('/:id', orderController.delete);
-router.get('/customer/:customerId', orderController.getByCustomer);
+router.get('/',                    ctrl.getAll);
+router.get('/stats',               ctrl.getStats);
+router.get('/customer/:customerId', ctrl.getByCustomer);
+router.get('/:id',                 ctrl.getById);
+router.post('/',                   ctrl.create);
+router.patch('/:id/status',        ctrl.updateStatus);
+router.delete('/:id',              ctrl.delete);
 
 export default router;

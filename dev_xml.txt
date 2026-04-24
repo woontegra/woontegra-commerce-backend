@@ -1,0 +1,39 @@
+
+> woontegra-backend@1.0.0 dev
+> ts-node-dev --respawn --transpile-only src/main.ts
+
+[INFO] 21:07:24 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 6.0.2)
+◇ injecting env (15) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+2026-04-08 21:07:30 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 21:07:30 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 21:07:31 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 21:07:32 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 31072                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 21:07:33 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":31072}
+2026-04-08 21:07:34 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 21:07:34 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:07:35 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:07:35 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:07:36 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:07:37 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 21:07:37 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:07:39 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 21:07:40 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+2026-04-08 21:07:49:749 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /unread-count] [method: GET]
+2026-04-08 21:08:01:81 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:08:17:817 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /unread-count] [method: GET]
+2026-04-08 21:08:31:831 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:09:01:91 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:09:31:931 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 21:09:36:936 [32m[32minfo[32m[39m: [32m[32mUser authenticated successfully[32m[39m [userId: 18d7855a-3fa3-43ce-a941-8ce70c44e777] [tenantId: fb3097d5-746c-446f-ae3c-310b7732f643] [path: /unread-count] [method: GET]
+2026-04-08 21:10:01:101 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m

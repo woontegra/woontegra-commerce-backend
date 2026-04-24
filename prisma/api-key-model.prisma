@@ -1,0 +1,34 @@
+// ApiKey Model - Add this to schema.prisma
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  name        String   // Key name/description
+  key         String   @unique // API key (hashed)
+  prefix      String   // First 8 chars for display (e.g., "sk_live_")
+  
+  // Rate limiting
+  rateLimit   Int      @default(100) // Requests per minute
+  requestCount Int     @default(0)   // Current period request count
+  lastReset   DateTime @default(now())
+  
+  // Permissions
+  permissions Json?    // { "orders": ["read", "write"], "products": ["read"] }
+  
+  // Status
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  
+  // Metadata
+  tenantId    String
+  userId      String?  // Optional: which user created it
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([key])
+  @@index([prefix])
+  @@map("api_keys")
+}

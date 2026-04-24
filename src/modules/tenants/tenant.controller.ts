@@ -66,4 +66,47 @@ export class TenantController {
       }
     }
   };
+
+  update = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const id = req.params.id as string;
+      const { name, slug, domain, isActive } = req.body;
+
+      const tenant = await this.tenantService.update(id, {
+        name,
+        slug,
+        domain,
+        isActive,
+      });
+
+      res.status(200).json({
+        status: 'success',
+        data: tenant,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Failed to update tenant' });
+      }
+    }
+  };
+
+  delete = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const id = req.params.id as string;
+      await this.tenantService.delete(id);
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Tenant deleted successfully',
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Failed to delete tenant' });
+      }
+    }
+  };
 }

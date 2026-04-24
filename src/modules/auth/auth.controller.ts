@@ -42,8 +42,8 @@ export class AuthController {
     try {
       const { email, password, tenantSlug } = req.body;
 
-      if (!email || !password || !tenantSlug) {
-        throw new AppError('Email, password, and tenant are required', 400);
+      if (!email || !password) {
+        throw new AppError('Email ve şifre gereklidir.', 400);
       }
 
       const result = await this.authService.login({ email, password, tenantSlug });
@@ -57,6 +57,39 @@ export class AuthController {
         res.status(error.statusCode).json({ error: error.message });
       } else {
         res.status(500).json({ error: 'Login failed' });
+      }
+    }
+  };
+
+  saasRegister = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { email, password, storeName, firstName, lastName } = req.body;
+
+      if (!email || !password || !storeName) {
+        throw new AppError('Email, password, and store name are required', 400);
+      }
+
+      if (password.length < 6) {
+        throw new AppError('Password must be at least 6 characters', 400);
+      }
+
+      const result = await this.authService.saasRegister({
+        email,
+        password,
+        storeName,
+        firstName,
+        lastName,
+      });
+
+      res.status(201).json({
+        status: 'success',
+        data: result,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Registration failed' });
       }
     }
   };

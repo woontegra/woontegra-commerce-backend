@@ -8,5 +8,19 @@
     "startCommand": "npm start",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
+  },
+  "services": {
+    "redis": {
+      "image": "redis:7-alpine",
+      "ports": ["6379"]
+    },
+    "meilisearch": {
+      "image": "getmeili/meilisearch:v1.6",
+      "ports": ["7700"],
+      "env": {
+        "MEILI_MASTER_KEY": "masterKey",
+        "MEILI_ENV": "development"
+      }
+    }
   }
 }

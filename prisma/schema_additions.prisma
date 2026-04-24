@@ -1,0 +1,200 @@
+// Add these models to your main schema.prisma file
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  userName    String?
+  userEmail   String?
+  userRole    String?
+  type        String
+  action      String
+  description String
+  targetType  String?
+  targetId    String?
+  targetName  String?
+  changes     Json?
+  metadata    Json?
+  status      String   @default("success")
+  errorMessage String?
+  timestamp   DateTime @default(now())
+  
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([type])
+  @@index([action])
+  @@index([timestamp])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  type        String
+  title       String
+  message     String
+  data        Json?
+  isRead      Boolean   @default(false)
+  isImportant Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  readAt      DateTime?
+  
+  @@index([type])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model APIToken {
+  id           String    @id @default(cuid())
+  name         String
+  token        String    @unique
+  permissions  Json
+  rateLimit    Int       @default(60)
+  currentUsage Int       @default(0)
+  isActive     Boolean   @default(true)
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+  createdBy    String
+  
+  creator      User      @relation(fields: [createdBy], references: [id])
+  
+  @@index([token])
+  @@index([isActive])
+}
+
+model Stock {
+  id                String   @id @default(cuid())
+  productId         String   @unique
+  quantity          Int      @default(0)
+  reservedQuantity  Int      @default(0)
+  lowStockThreshold Int      @default(10)
+  updatedAt         DateTime @updatedAt
+  
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@index([productId])
+}
+
+model ProductStats {
+  id        String   @id @default(cuid())
+  productId String   @unique
+  views     Int      @default(0)
+  addToCart Int      @default(0)
+  sales     Int      @default(0)
+  revenue   Decimal  @default(0) @db.Decimal(10, 2)
+  updatedAt DateTime @updatedAt
+  
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@index([productId])
+}
+
+model AbandonedCart {
+  id             String    @id @default(cuid())
+  userId         String?
+  sessionId      String
+  cartData       Json
+  status         String    @default("abandoned")
+  reminderSentAt DateTime?
+  recoveredAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  user           User?     @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([sessionId])
+  @@index([status])
+}
+
+model DiscountRule {
+  id            String   @id @default(cuid())
+  name          String
+  type          String
+  priority      Int
+  conditions    Json
+  discount      Json
+  usageLimit    Int?
+  usagePerUser  Int?
+  currentUsage  Int      @default(0)
+  stackable     Boolean  @default(false)
+  excludesWith  Json?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([type])
+  @@index([isActive])
+  @@index([priority])
+}
+
+model B2BProfile {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  companyName    String
+  taxNumber      String
+  taxOffice      String
+  discountRate   Decimal   @default(0) @db.Decimal(5, 2)
+  priceGroup     String?
+  paymentTerms   Int       @default(0)
+  creditLimit    Decimal   @default(0) @db.Decimal(10, 2)
+  currentDebt    Decimal   @default(0) @db.Decimal(10, 2)
+  minOrderAmount Decimal   @default(0) @db.Decimal(10, 2)
+  maxOrderAmount Decimal?  @db.Decimal(10, 2)
+  status         String    @default("pending")
+  approvedAt     DateTime?
+  approvedBy     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+}
+
+model TrendyolConnection {
+  id         String    @id @default(cuid())
+  supplierId String
+  apiKey     String
+  apiSecret  String
+  isActive   Boolean   @default(true)
+  lastSync   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model SyncHistory {
+  id             String   @id @default(cuid())
+  type           String
+  status         String
+  itemsProcessed Int      @default(0)
+  itemsFailed    Int      @default(0)
+  startedAt      DateTime
+  completedAt    DateTime
+  error          String?
+  metadata       Json?
+  
+  @@index([type])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model ImportLog {
+  id          String    @id @default(cuid())
+  filename    String
+  type        String
+  status      String
+  totalRows   Int       @default(0)
+  successRows Int       @default(0)
+  failedRows  Int       @default(0)
+  errors      Json?
+  startedAt   DateTime
+  completedAt DateTime?
+  createdBy   String
+  
+  creator     User      @relation(fields: [createdBy], references: [id])
+  
+  @@index([type])
+  @@index([status])
+  @@index([createdBy])
+}

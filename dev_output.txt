@@ -1,0 +1,45 @@
+
+> woontegra-backend@1.0.0 dev
+> ts-node-dev --respawn --transpile-only src/main.ts
+
+[INFO] 15:39:51 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 6.0.2)
+◇ injecting env (15) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+2026-04-08 15:39:58 [[33mwarn[39m]: [Email] SMTP not configured — emails will be logged only
+2026-04-08 15:39:58 [[32minfo[39m]: [Notifications] All event handlers registered
+2026-04-08 15:39:58 [[32minfo[39m]: [Lifecycle Cron] Scheduled (daily 00:05 Istanbul)
+2026-04-08 15:39:58 [[32minfo[39m]: [Lifecycle Cron] Starting tick
+
+╔══════════════════════════════════════════════════╗
+║                                                           ║
+║   🚀 Woontegra E-Commerce SaaS Backend                   ║
+║                                                           ║
+║   Server running on: http://localhost:3000            ║
+║   Environment: development                              ║
+║   Process ID: 27408                                   ║
+║                                                           ║
+╚════════════════════════════════════════════════════╝
+  
+2026-04-08 15:39:58 [[32minfo[39m]: Server started successfully {"port":"3000","environment":"development","pid":27408}
+2026-04-08 15:39:58 [[31merror[39m]: Port 3000 is already in use {"error":"listen EADDRINUSE: address already in use :::3000"}
+2026-04-08 15:39:58 [[33mwarn[39m]: [Meilisearch] Not reachable — search features disabled {"host":"http://127.0.0.1:7700"}
+2026-04-08 15:39:58 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 15:39:58 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 15:39:59 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 15:39:59 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 15:40:00 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 15:40:00 [[32minfo[39m]: [Lifecycle Cron] Tick complete {"expiredTrials":0,"checkedActive":0}
+2026-04-08 15:40:01 [[31merror[39m]: Redis client error: {"code":"ECONNREFUSED","stack":"AggregateError: \n    at internalConnectMultiple (node:net:1122:18)\n    at afterConnectMultiple (node:net:1689:7)"}
+2026-04-08 15:40:03 [[32minfo[39m]: [FeatureService] Synced 16 feature definitions
+2026-04-08 15:40:28:4028 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:40:58:4058 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:41:28:4128 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:41:58:4158 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:42:28:4228 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:42:58:4258 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:43:28:4328 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:43:58:4358 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:44:28:4428 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:44:58:4458 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:45:28:4528 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:45:58:4558 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m
+2026-04-08 15:46:28:4628 [33m[33mwarn[33m[39m: [33m[33mHigh memory usage detected[33m[39m

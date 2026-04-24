@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sepetinizde Ürünler Bekliyor</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+    }
+    .header {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      padding: 40px 20px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      margin: 0;
+      font-size: 28px;
+    }
+    .header p {
+      color: #ffffff;
+      margin: 10px 0 0 0;
+      opacity: 0.9;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .cart-items {
+      margin: 30px 0;
+    }
+    .cart-item {
+      display: flex;
+      gap: 15px;
+      padding: 15px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      background-color: #fafafa;
+    }
+    .cart-item img {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 6px;
+      background-color: #f0f0f0;
+    }
+    .cart-item-info {
+      flex: 1;
+    }
+    .cart-item-name {
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 5px 0;
+      font-size: 16px;
+    }
+    .cart-item-variant {
+      font-size: 14px;
+      color: #666;
+      margin: 0 0 8px 0;
+    }
+    .cart-item-price {
+      font-size: 18px;
+      font-weight: bold;
+      color: #f5576c;
+    }
+    .cart-item-quantity {
+      font-size: 14px;
+      color: #666;
+      margin-top: 5px;
+    }
+    .total-box {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: #ffffff;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      margin: 30px 0;
+    }
+    .total-box h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      opacity: 0.9;
+    }
+    .total-amount {
+      font-size: 32px;
+      font-weight: bold;
+      margin: 0;
+    }
+    .button {
+      display: inline-block;
+      padding: 16px 40px;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 8px;
+      margin: 20px 0;
+      font-weight: 600;
+      font-size: 16px;
+      box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+    }
+    .urgency-box {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .urgency-box p {
+      margin: 0;
+      font-size: 14px;
+      color: #856404;
+    }
+    .benefits {
+      margin: 30px 0;
+    }
+    .benefit-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 12px 0;
+      padding: 12px;
+      background-color: #f8f9fa;
+      border-radius: 6px;
+    }
+    .benefit-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .benefit-text {
+      font-size: 14px;
+      color: #333;
+    }
+    .footer {
+      background-color: #f8f9fa;
+      padding: 30px;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+    }
+    .footer a {
+      color: #f5576c;
+      text-decoration: none;
+    }
+    .social-links {
+      margin: 20px 0;
+    }
+    .social-links a {
+      display: inline-block;
+      margin: 0 10px;
+      color: #666;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🛒 Sepetinizde Ürünler Bekliyor!</h1>
+      <p>Beğendiğiniz ürünleri kaçırmayın</p>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <p>Merhaba <strong>{{customerName}}</strong>,</p>
+      <p>Sepetinizde harika ürünler var! Alışverişinizi tamamlamak için sadece bir adım kaldı.</p>
+
+      <!-- Cart Items -->
+      <div class="cart-items">
+        {{#each items}}
+        <div class="cart-item">
+          <img src="{{this.image}}" alt="{{this.name}}">
+          <div class="cart-item-info">
+            <h3 class="cart-item-name">{{this.name}}</h3>
+            {{#if this.variant}}
+            <p class="cart-item-variant">{{this.variant}}</p>
+            {{/if}}
+            <p class="cart-item-price">₺{{this.price}}</p>
+            <p class="cart-item-quantity">Adet: {{this.quantity}}</p>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+
+      <!-- Total -->
+      <div class="total-box">
+        <h3>Sepet Toplamı</h3>
+        <p class="total-amount">₺{{cartTotal}}</p>
+      </div>
+
+      <!-- Urgency -->
+      <div class="urgency-box">
+        <p><strong>⏰ Dikkat!</strong> Ürünleriniz stokta sınırlı sayıda. Sepetinizdeki ürünler başkaları tarafından satın alınabilir.</p>
+      </div>
+
+      <!-- CTA Button -->
+      <center>
+        <a href="{{cartUrl}}" class="button">Alışverişi Tamamla</a>
+      </center>
+
+      <!-- Benefits -->
+      <div class="benefits">
+        <h3 style="text-align: center; margin-bottom: 20px;">Neden Bizi Tercih Etmelisiniz?</h3>
+        <div class="benefit-item">
+          <div class="benefit-icon">🚚</div>
+          <div class="benefit-text">
+            <strong>Ücretsiz Kargo</strong><br>
+            {{freeShippingThreshold}} TL ve üzeri alışverişlerde
+          </div>
+        </div>
+        <div class="benefit-item">
+          <div class="benefit-icon">🔒</div>
+          <div class="benefit-text">
+            <strong>Güvenli Ödeme</strong><br>
+            SSL sertifikası ile korunan ödeme sistemi
+          </div>
+        </div>
+        <div class="benefit-item">
+          <div class="benefit-icon">↩️</div>
+          <div class="benefit-text">
+            <strong>Kolay İade</strong><br>
+            14 gün içinde ücretsiz iade hakkı
+          </div>
+        </div>
+        <div class="benefit-item">
+          <div class="benefit-icon">💳</div>
+          <div class="benefit-text">
+            <strong>Taksit Seçenekleri</strong><br>
+            Tüm kredi kartlarına taksit imkanı
+          </div>
+        </div>
+      </div>
+
+      <p style="margin-top: 30px; font-size: 14px; color: #666; text-align: center;">
+        Sorularınız mı var? Müşteri hizmetlerimiz size yardımcı olmak için burada!
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>Bu mail otomatik olarak gönderilmiştir.</p>
+      <p>Sorularınız için <a href="mailto:{{supportEmail}}">{{supportEmail}}</a> adresinden bize ulaşabilirsiniz.</p>
+      
+      <div class="social-links">
+        <a href="#">Facebook</a> | 
+        <a href="#">Instagram</a> | 
+        <a href="#">Twitter</a>
+      </div>
+      
+      <p style="margin-top: 20px;">© 2024 {{storeName}}. Tüm hakları saklıdır.</p>
+      
+      <p style="margin-top: 15px; font-size: 11px; color: #999;">
+        Bu maili almak istemiyorsanız <a href="{{unsubscribeUrl}}" style="color: #999;">buradan</a> abonelikten çıkabilirsiniz.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

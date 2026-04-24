@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Siparişiniz Alındı</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px 20px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      margin: 0;
+      font-size: 28px;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .order-info {
+      background-color: #f8f9fa;
+      border-left: 4px solid #667eea;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .order-info h2 {
+      margin-top: 0;
+      color: #667eea;
+      font-size: 18px;
+    }
+    .order-details {
+      margin: 15px 0;
+    }
+    .order-details p {
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    .order-details strong {
+      color: #333;
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    .items-table th {
+      background-color: #f8f9fa;
+      padding: 12px;
+      text-align: left;
+      font-size: 14px;
+      color: #666;
+      border-bottom: 2px solid #dee2e6;
+    }
+    .items-table td {
+      padding: 12px;
+      border-bottom: 1px solid #dee2e6;
+      font-size: 14px;
+    }
+    .total-row {
+      background-color: #f8f9fa;
+      font-weight: bold;
+    }
+    .button {
+      display: inline-block;
+      padding: 14px 30px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 6px;
+      margin: 20px 0;
+      font-weight: 600;
+    }
+    .footer {
+      background-color: #f8f9fa;
+      padding: 30px;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+    }
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>✓ Siparişiniz Alındı!</h1>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <p>Merhaba <strong>{{customerName}}</strong>,</p>
+      <p>Siparişiniz başarıyla alındı ve işleme konuldu. Siparişinizle ilgili detaylar aşağıdadır:</p>
+
+      <!-- Order Info -->
+      <div class="order-info">
+        <h2>Sipariş Bilgileri</h2>
+        <div class="order-details">
+          <p><strong>Sipariş No:</strong> #{{orderNumber}}</p>
+          <p><strong>Sipariş Tarihi:</strong> {{orderDate}}</p>
+          <p><strong>Durum:</strong> {{orderStatus}}</p>
+        </div>
+      </div>
+
+      <!-- Order Items -->
+      <h3>Sipariş Detayları</h3>
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Ürün</th>
+            <th>Adet</th>
+            <th>Fiyat</th>
+            <th>Toplam</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each items}}
+          <tr>
+            <td>{{this.name}}</td>
+            <td>{{this.quantity}}</td>
+            <td>₺{{this.price}}</td>
+            <td>₺{{this.total}}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td colspan="3">Toplam</td>
+            <td>₺{{orderTotal}}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- Shipping Address -->
+      <div class="order-info">
+        <h2>Teslimat Adresi</h2>
+        <div class="order-details">
+          <p>{{shippingAddress.fullName}}</p>
+          <p>{{shippingAddress.address}}</p>
+          <p>{{shippingAddress.city}}, {{shippingAddress.postalCode}}</p>
+          <p>{{shippingAddress.phone}}</p>
+        </div>
+      </div>
+
+      <!-- CTA Button -->
+      <center>
+        <a href="{{orderUrl}}" class="button">Siparişimi Görüntüle</a>
+      </center>
+
+      <p style="margin-top: 30px; font-size: 14px; color: #666;">
+        Siparişiniz hazırlandığında ve kargoya verildiğinde size bilgilendirme maili göndereceğiz.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>Bu mail otomatik olarak gönderilmiştir.</p>
+      <p>Sorularınız için <a href="mailto:{{supportEmail}}">{{supportEmail}}</a> adresinden bize ulaşabilirsiniz.</p>
+      <p style="margin-top: 20px;">© 2024 {{storeName}}. Tüm hakları saklıdır.</p>
+    </div>
+  </div>
+</body>
+</html>

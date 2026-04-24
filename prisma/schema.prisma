@@ -8,46 +8,127 @@ datasource db {
 }
 
 model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  slug      String   @unique
-  domain    String?  @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users     User[]
-  products  Product[]
-  categories Category[]
-  orders    Order[]
-  customers Customer[]
-  settings  Settings?
+  id                   String                @id @default(uuid())
+  name                 String
+  slug                 String                @unique
+  isActive             Boolean               @default(true)
+  status               TenantStatus          @default(TRIAL)
+  trialEndsAt          DateTime?
+  suspendedAt          DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  customDomain         String?               @unique
+  domainVerified       Boolean               @default(false)
+  subdomain            String?               @unique
+  abandonedCarts       AbandonedCart[]
+  activityLogs         ActivityLog[]
+  apiTokens            ApiToken[]
+  webhooks             Webhook[]
+  b2bProfiles          B2BProfile[]
+  campaigns            Campaign[]
+  carts                Cart[]
+  categories           Category[]
+  coupons              Coupon[]
+  customerGroups       CustomerGroup[]
+  customers            Customer[]
+  discountRules        DiscountRule[]
+  importLogs           ImportLog[]
+  logs                 Log[]
+  notifications        Notification[]
+  orders               Order[]
+  pages                Page[]
+  posts                Post[]
+  productStats         ProductStats[]
+  products             Product[]
+  searchHistory        SearchHistory[]
+  settings             Settings?
+  shippingMethods      ShippingMethod[]
+  Stock                Stock[]
+  syncHistories        SyncHistory[]
+  trendyolIntegrations  TrendyolIntegration[]
+  trendyolProductMaps   TrendyolProductMap[]
+  trendyolProductPrices TrendyolProductPrice[]
+  trendyolOrders           TrendyolOrder[]
+  trendyolSyncQueue        TrendyolSyncQueue[]
+  trendyolProductSettings  TrendyolProductSettings[]
+  users                User[]
+  marketplaceAccounts    MarketplaceAccount[]
+  marketplaceProductMaps MarketplaceProductMap[]
+  attributes             Attribute[]
+  marketplaceOrders      MarketplaceOrder[]
+  marketplaceSyncLogs    MarketplaceSyncLog[]
+  subscriptions          Subscription[]
+  payments               Payment[]
+  tenantFeatures         TenantFeature[]
+  invoices               Invoice[]
+  integrationLogs        IntegrationLog[]
+  brands                 Brand[]
+  wishlists              Wishlist[]
+  popups                 Popup[]
+  shippingRules          ShippingRule[]
+  stores                 Store[]
+  exchangeRates          ExchangeRate[]
+  apiKeys                ApiKey[]
 
   @@map("tenants")
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String
-  password  String
-  firstName String
-  lastName  String
-  role      UserRole @default(USER)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id              String           @id @default(uuid())
+  email           String
+  password        String
+  firstName       String
+  lastName        String
+  role            UserRole         @default(USER)
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  tenantId        String
+  plan            Plan             @default(STARTER)
+  AbandonedCart   AbandonedCart[]
+  B2BProfile      B2BProfile?
+  Cart            Cart[]
+  ImportLog       ImportLog[]
+  Post            Post[]
+  Wishlist        Wishlist?
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptions   Subscription[]
+  payments        Payment[]
+  userPermissions UserPermission[]
 
   @@unique([email, tenantId])
   @@map("users")
 }
 
-enum UserRole {
-  ADMIN
-  MANAGER
-  USER
+// ─── Granular per-user permission overrides ───────────────────────────────────
+// Role defaults are code-defined; this table stores ONLY explicit overrides.
+// granted=true  → grant even if role wouldn't allow
+// granted=false → revoke even if role would allow
+model UserPermission {
+  id        String   @id @default(uuid())
+  userId    String
+  key       String   // e.g. "product.create", "order.view"
+  granted   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@map("user_permissions")
+}
+
+model CustomerGroup {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenantId  String
+  customers Customer[]
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([name, tenantId])
+  @@map("customer_groups")
 }
 
 model Customer {
@@ -60,12 +141,12 @@ model Customer {
   city      String?
   country   String?
   zipCode   String?
+  groupId   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
+  group     CustomerGroup? @relation(fields: [groupId], references: [id])
   orders    Order[]
 
   @@unique([email, tenantId])
@@ -73,107 +154,1613 @@ model Customer {
 }
 
 model Category {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String
-  description String?
-  parentId    String?
-  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    Category[] @relation("CategoryHierarchy")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  products    Product[]
+  id              String     @id @default(uuid())
+  name            String
+  slug            String
+  description     String?
+  parentId        String?
+  // ── Tree metadata ─────────────────────────────────────────────────────────
+  level           Int        @default(0)    // 0 = kök, 1 = alt, 2 = alt-alt ...
+  path            String     @default("")   // örn: "elektronik/telefonlar/akilli-telefonlar"
+  order           Int        @default(0)    // aynı seviyede sıralama
+  isActive        Boolean    @default(true)
+  // ── Görsel & İkon ─────────────────────────────────────────────────────────
+  imageUrl        String?
+  icon            String?    // emoji veya icon kodu
+  // ── SEO ──────────────────────────────────────────────────────────────────
+  metaTitle       String?
+  metaDescription String?
+  // ── Timestamps ────────────────────────────────────────────────────────────
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  tenantId        String
+  parent          Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children        Category[] @relation("CategoryHierarchy")
+  tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products        Product[]
+  categoryAttributes CategoryAttribute[]
 
   @@unique([slug, tenantId])
+  @@index([tenantId, level])
+  @@index([tenantId, parentId])
+  @@index([tenantId, path])
   @@map("categories")
 }
 
-model Product {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String
-  description String?
-  price       Decimal  @db.Decimal(10, 2)
-  stock       Int      @default(0)
-  sku         String?
-  isActive    Boolean  @default(true)
-  images      String[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// ─── Attribute System ─────────────────────────────────────────────────────────
 
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  categoryId  String?
-  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-
-  orderItems  OrderItem[]
+model Attribute {
+  id           String             @id @default(uuid())
+  name         String
+  slug         String             // e.g. "renk", "numara"
+  type         String             // select | multiselect | text | number | boolean | color
+  unit         String?            // e.g. "cm", "kg" (for number type)
+  isFilterable Boolean            @default(true)
+  isRequired   Boolean            @default(false)
+  displayOrder Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  tenantId     String
+  tenant            Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  values            AttributeValue[]
+  categories        CategoryAttribute[]
+  productValues     ProductAttributeValue[]
+  variantAttributes VariantAttribute[]
 
   @@unique([slug, tenantId])
+  @@index([tenantId])
+  @@map("attributes")
+}
+
+model AttributeValue {
+  id           String    @id @default(uuid())
+  value        String    // internal value key  e.g. "kirmizi"
+  label        String    // display label       e.g. "Kırmızı"
+  color        String?   // hex color for color-type attributes
+  displayOrder Int       @default(0)
+  attributeId  String
+  attribute         Attribute              @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  productValues     ProductAttributeValue[]
+  variantAttributes VariantAttribute[]
+
+  @@index([attributeId])
+  @@map("attribute_values")
+}
+
+model CategoryAttribute {
+  id           String    @id @default(uuid())
+  categoryId   String
+  attributeId  String
+  required     Boolean   @default(false)
+  isVariant    Boolean   @default(false)   // true → feeds variant engine
+  displayOrder Int       @default(0)
+  category     Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attribute    Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, attributeId])
+  @@index([categoryId])
+  @@map("category_attributes")
+}
+
+model ProductAttributeValue {
+  id               String          @id @default(uuid())
+  productId        String
+  attributeId      String
+  // For text/number/boolean: raw value stored here
+  value            String?
+  // For select/multiselect: references to AttributeValue
+  attributeValueId String?
+  product          Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attribute        Attribute       @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  attributeValue   AttributeValue? @relation(fields: [attributeValueId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@index([attributeId])
+  @@map("product_attribute_values")
+}
+
+model Product {
+  id                String             @id @default(uuid())
+  name              String
+  slug              String
+  description       String?
+  // ── Legacy price field (kept for backward compat with OrderItem/CartItem) ──
+  price             Decimal            @db.Decimal(10, 2)
+  sku               String?
+  barcode           String?   @unique  // Barkod (EAN-13 / QR) — globally unique
+  isAutoBarcode     Boolean   @default(false)  // true = system-generated, false = user-provided (immutable)
+  unit              String             @default("adet")  // adet | kg | metre | litre | paket
+  brand             String?            // Marka
+  status            String             @default("active") // active | draft | archived
+  isActive          Boolean            @default(true)
+  images            String[]           // legacy — ProductImage relation is preferred
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  tenantId          String
+  categoryId        String?
+  basePrice         Decimal?           @db.Decimal(10, 2)
+  customFields      Json?
+  hasVariants       Boolean            @default(false)
+  maxQuantity       Int?
+  minQuantity       Int                @default(1)
+  stepQuantity      Int                @default(1)
+  unitType          String             @default("piece")
+  unitValue         Decimal            @default(1) @db.Decimal(10, 2)
+  variantOptions    Json?
+  taxRate           Decimal            @default(20) @db.Decimal(5, 2) // KDV oranı (%)
+  storeId           String?
+  cartItems         CartItem[]
+  customFieldValues CustomFieldValue[]
+  orderItems        OrderItem[]
+  productStats      ProductStats?
+  variants          ProductVariant[]
+  wishlistItems     WishlistItem[]
+  category          Category?          @relation(fields: [categoryId], references: [id])
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store             Store?             @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  stock             Stock?
+  marketplaceProductMaps MarketplaceProductMap[]
+  trendyolMaps            TrendyolProductMap[]
+  integrationLogs         IntegrationLog[]
+  trendyolProductPrice    TrendyolProductPrice?
+  trendyolProductSettings TrendyolProductSettings?
+  // ── New domain relations ──────────────────────────────────────────────────
+  pricing           ProductPrice?
+  shipping          ProductShipping?
+  productImages     ProductImage[]
+  attributeValues   ProductAttributeValue[]
+  translations      ProductTranslation[]
+
+  @@unique([slug, tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, categoryId])
   @@map("products")
 }
 
+model ProductVariant {
+  id                String             @id @default(uuid())
+  name              String
+  price             Decimal?           @db.Decimal(10, 2)   // override: null = inherit product price
+  discountPrice     Decimal?           @db.Decimal(10, 2)   // override: null = inherit product discountPrice
+  wholesalePrice    Decimal?           @db.Decimal(10, 2)   // toptan fiyatı
+  groupPrices       Json?                                  // {groupId: price}
+  sku               String?            @unique
+  barcode           String?   @unique  // globally unique — auto-generated if not set by user
+  isAutoBarcode     Boolean   @default(false)
+  stockQuantity     Decimal            @default(0) @db.Decimal(10, 3)
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  productId         String
+  combination       Json               @default("{}")   // legacy cache: {"Renk":"Kırmızı","Numara":"38"}
+  images            String[]
+  cartItems         CartItem[]
+  orderItems        OrderItem[]
+  wishlistItems     WishlistItem[]
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantAttributes VariantAttribute[]  // relational attribute mapping
+
+  @@index([productId])
+  @@index([productId, isActive])
+  @@map("product_variants")
+}
+
+// ─── Variant ↔ Attribute relational mapping ──────────────────────────────────
+
+model VariantAttribute {
+  id             String          @id @default(uuid())
+  variantId      String
+  attributeId    String
+  valueId        String?         // set for select/multiselect/color attrs
+  textValue      String?         // set for free-text/number attrs
+
+  variant        ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attribute      Attribute       @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  attributeValue AttributeValue? @relation(fields: [valueId], references: [id], onDelete: SetNull)
+
+  @@unique([variantId, attributeId])
+  @@index([variantId])
+  @@index([attributeId])
+  @@map("variant_attributes")
+}
+
+// ─── Product Price (ayrı fiyatlandırma tablosu) ──────────────────────────────
+
+model ProductPrice {
+  id            String   @id @default(uuid())
+  productId     String   @unique
+  salePrice     Decimal  @db.Decimal(10, 2)
+  purchasePrice Decimal? @db.Decimal(10, 2)  // Alış fiyatı
+  discountPrice Decimal? @db.Decimal(10, 2)  // İndirimli fiyat
+  vatRate       Decimal  @default(18) @db.Decimal(5, 2)
+  currency      String   @default("TRY")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_prices")
+}
+
+// ─── Product Shipping (kargo bilgileri) ──────────────────────────────────────
+
+model ProductShipping {
+  id               String   @id @default(uuid())
+  productId        String   @unique
+  weight           Decimal? @db.Decimal(10, 3)   // kg
+  width            Decimal? @db.Decimal(10, 2)   // cm
+  height           Decimal? @db.Decimal(10, 2)   // cm
+  length           Decimal? @db.Decimal(10, 2)   // cm
+  desi             Decimal? @db.Decimal(10, 2)   // otomatik veya manuel
+  freeShipping     Boolean  @default(false)
+  shippingCost     Decimal? @db.Decimal(10, 2)
+  // Trendyol-specific
+  cargoCompanyId   Int?                           // Trendyol cargo company ID (e.g. 10=MNG, 4=Yurtiçi)
+  deliveryDuration Int?                           // delivery days (e.g. 3)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_shipping")
+}
+
+// ─── Product Image (sıralı görsel tablosu) ───────────────────────────────────
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  url       String
+  order     Int      @default(0)
+  isMain    Boolean  @default(false)
+  alt       String?
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, order])
+  @@map("product_images")
+}
+
 model Order {
-  id          String      @id @default(uuid())
-  orderNumber String      @unique
-  status      OrderStatus @default(PENDING)
-  totalAmount Decimal     @db.Decimal(10, 2)
-  notes       String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id               String          @id @default(uuid())
+  orderNumber      String          @unique
+  status           OrderStatus     @default(PENDING)
+  totalAmount      Decimal         @db.Decimal(10, 2)
+  currency         String          @default("TRY")
+  notes            String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  tenantId         String
+  customerId       String
+  shippingMethodId String?
+  shippingPrice    Decimal         @default(0) @db.Decimal(10, 2)
+  couponId         String?
+  discountAmount   Decimal         @default(0) @db.Decimal(10, 2)
+  campaignDiscount Decimal         @default(0) @db.Decimal(10, 2)
+  items            OrderItem[]
+  coupon           Coupon?         @relation(fields: [couponId], references: [id])
+  customer         Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  shippingMethod   ShippingMethod? @relation(fields: [shippingMethodId], references: [id])
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  tenantId    String
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  customerId  String
-  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  items       OrderItem[]
-
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([customerId])
   @@map("orders")
 }
 
-enum OrderStatus {
-  PENDING
-  PROCESSING
-  SHIPPED
-  DELIVERED
-  CANCELLED
-}
-
 model OrderItem {
-  id        String   @id @default(uuid())
-  quantity  Int
-  price     Decimal  @db.Decimal(10, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  orderId   String
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id             String          @id @default(uuid())
+  quantity       Int
+  price          Decimal         @db.Decimal(10, 2)
+  discountAmount Decimal         @default(0) @db.Decimal(10, 2)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  orderId        String
+  productId      String
+  variantId      String?
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@map("order_items")
 }
 
 model Settings {
-  id           String   @id @default(uuid())
-  siteName     String   @default("My Store")
-  logo         String?
-  primaryColor String   @default("#3B82F6")
-  secondaryColor String? @default("#10B981")
-  currency     String   @default("USD")
-  language     String   @default("en")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  tenantId     String   @unique
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  siteName       String   @default("My Store")
+  logo           String?           // legacy — kept for BC
+  logoUrl        String?           // uploaded logo URL
+  faviconUrl     String?           // uploaded favicon URL
+  primaryColor   String   @default("#3B82F6")
+  secondaryColor String?  @default("#10B981")
+  accentColor    String?  @default("#F59E0B")
+  fontFamily     String?  @default("Inter")
+  borderRadius   String?  @default("0.5rem")  // e.g. "0rem" | "0.5rem" | "1rem"
+  customCss      String?           // advanced: tenant-injected CSS
+  currency       String   @default("USD")
+  language       String   @default("en")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenantId       String   @unique
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("settings")
+}
+
+model Page {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String
+  sections    Json     @default("[]")
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([slug, tenantId])
+  @@map("pages")
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  tenantId  String
+  userId    String?
+  items     CartItem[]
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String          @id @default(uuid())
+  quantity  Int             @default(1)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  cartId    String
+  productId String
+  variantId String?
+  cart      Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@unique([cartId, productId, variantId])
+  @@map("cart_items")
+}
+
+model ShippingMethod {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  price         Decimal  @db.Decimal(10, 2)
+  estimatedDays Int?     @default(3)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tenantId      String
+  orders        Order[]
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("shipping_methods")
+}
+
+model Coupon {
+  id             String       @id @default(uuid())
+  code           String       @unique
+  discountType   DiscountType @default(PERCENTAGE)
+  value          Decimal      @db.Decimal(10, 2)
+  minOrderAmount Decimal?     @db.Decimal(10, 2)
+  maxDiscount    Decimal?     @db.Decimal(10, 2)
+  usageLimit     Int?         @default(0)
+  usageCount     Int          @default(0)
+  isActive       Boolean      @default(true)
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders         Order[]
+
+  @@map("coupons")
+}
+
+model Post {
+  id          String    @id @default(uuid())
+  title       String
+  slug        String
+  content     String
+  excerpt     String?
+  coverImage  String?
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenantId    String
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([slug, tenantId])
+  @@map("posts")
+}
+
+model ApiToken {
+  id         String    @id @default(uuid())
+  name       String
+  token      String    @unique
+  scopes     String[]  @default([])  // e.g. ["products:read","orders:write"]
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  isActive   Boolean   @default(true)
+  rateLimit  Int       @default(1000) // requests per hour
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("api_tokens")
+}
+
+// ─── Webhooks ─────────────────────────────────────────────────────────────────
+
+model Webhook {
+  id          String       @id @default(uuid())
+  tenantId    String
+  url         String
+  secret      String       // HMAC-SHA256 signing secret
+  events      String[]     // ["order.created", "payment.success", ...]
+  description String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  logs        WebhookLog[]
+
+  @@index([tenantId])
+  @@map("webhooks")
+}
+
+model WebhookLog {
+  id          String    @id @default(uuid())
+  webhookId   String
+  event       String
+  payload     Json
+  statusCode  Int?
+  response    String?   // truncated response body
+  success     Boolean
+  attempts    Int       @default(1)
+  nextRetryAt DateTime?
+  createdAt   DateTime  @default(now())
+  webhook     Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([event])
+  @@index([success])
+  @@map("webhook_logs")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  tenantId  String
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Campaign {
+  id                 String           @id @default(uuid())
+  name               String
+  description        String?
+  code               String?          @unique
+  discountType       CampaignType
+  discountPercentage Int?
+  discountAmount     Decimal?         @db.Decimal(10, 2)
+  buyQuantity        Int?
+  getQuantity        Int?
+  maxDiscount        Decimal?         @db.Decimal(10, 2)
+  rules              Json
+  startDate          DateTime
+  endDate            DateTime
+  usageLimit         Int?
+  usagePerUser       Int?
+  currentUsage       Int              @default(0)
+  isActive           Boolean          @default(true)
+  priority           Int              @default(0)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  tenantId           String
+  usage              CampaignUsage[]
+  campaignRules      CampaignRule[]
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive])
+  @@map("campaigns")
+}
+
+model CampaignRule {
+  id         String           @id @default(uuid())
+  campaignId String
+  type       CampaignRuleType
+  conditions Json             @default("{}")
+  actions    Json             @default("{}")
+  priority   Int              @default(0)
+  isActive   Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  campaign   Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("campaign_rules")
+}
+
+model CampaignUsage {
+  id             String   @id @default(uuid())
+  discountAmount Decimal  @db.Decimal(10, 2)
+  usedAt         DateTime @default(now())
+  campaignId     String
+  userId         String
+  orderId        String?
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_usage")
+}
+
+model Log {
+  id          String   @id @default(uuid())
+  type        LogType
+  level       LogLevel
+  action      String
+  description String?
+  userId      String?
+  userName    String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([level])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("logs")
+}
+
+model CustomFieldValue {
+  id        String   @id @default(uuid())
+  fieldId   String
+  value     String
+  createdAt DateTime @default(now())
+  orderId   String
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("custom_field_values")
+}
+
+model TrendyolIntegration {
+  id                String                   @id @default(uuid())
+  supplierId        String
+  apiKey            String
+  apiSecret         String
+  token             String?
+  integrationCode   String?
+  isActive          Boolean                  @default(true)
+  lastSync          DateTime?
+  lastOrderSync     DateTime?                // Son sipariş çekme zamanı
+  categoryMappings  Json                     @default("{}")
+  attributeMappings Json                     @default("{}")
+  brandMappings     Json                     @default("{}")
+  shippingDefaults  Json                     @default("{}")
+  priceStrategy     Json                     @default("{}")
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  tenantId          String
+  syncHistory       IntegrationSyncHistory[]
+  productMaps       TrendyolProductMap[]
+  trendyolOrders    TrendyolOrder[]
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, tenantId])
+  @@map("trendyol_integrations")
+}
+
+// ─── Trendyol Order Sync ──────────────────────────────────────────────────────
+
+model TrendyolOrder {
+  id                  String              @id @default(uuid())
+  tenantId            String
+  integrationId       String
+  orderNumber         String              // Trendyol sipariş numarası
+  status              String              // Created, Picking, Invoiced, Shipped, Cancelled...
+  totalPrice          Decimal             @db.Decimal(10, 2)
+  orderDate           DateTime
+  cargoTrackingNumber String?
+  shipmentAddress     Json?
+  invoiceAddress      Json?
+  customerFirstName   String?
+  customerLastName    String?
+  customerEmail       String?
+  stockDecremented    Boolean             @default(false)
+  rawPayload          Json?               // Ham Trendyol verisi
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  items       TrendyolOrderItem[]
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  integration TrendyolIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, orderDate(sort: Desc)])
+  @@map("trendyol_orders")
+}
+
+model TrendyolOrderItem {
+  id          String  @id @default(uuid())
+  orderId     String
+  lineId      String? // Trendyol line id (durum güncellemesi için)
+  barcode     String
+  productName String
+  productId   String? // Barkod üzerinden eşleştirilen ürün — null olabilir
+  variantId   String? // Barkod üzerinden eşleştirilen varyant — null olabilir
+  quantity    Int
+  price       Decimal @db.Decimal(10, 2)
+  merchantSku String?
+
+  order TrendyolOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([barcode])
+  @@map("trendyol_order_items")
+}
+
+model TrendyolProductPrice {
+  id            String   @id @default(uuid())
+  tenantId      String
+  productId     String   @unique
+  customPrice   Decimal?
+  increaseMode  String?
+  increaseValue Decimal?
+  vatRate       Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("trendyol_product_prices")
+}
+
+model TrendyolProductMap {
+  id             String   @id @default(uuid())
+  tenantId       String
+  productId      String
+  batchId        String?
+  trendyolStatus String   @default("PENDING")
+  errorMessage   String?
+  lastSyncAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  integrationId  String
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  integration TrendyolIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, productId])
+  @@index([tenantId, trendyolStatus])
+  @@map("trendyol_product_maps")
+}
+
+model IntegrationSyncHistory {
+  id             String              @id @default(uuid())
+  type           SyncType
+  status         SyncStatus
+  itemsProcessed Int                 @default(0)
+  itemsFailed    Int                 @default(0)
+  errorMessage   String?
+  startedAt      DateTime            @default(now())
+  completedAt    DateTime?
+  integrationId  String
+  integration    TrendyolIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([status])
+  @@index([startedAt])
+  @@map("integration_sync_history")
+}
+
+model SearchHistory {
+  id          String   @id @default(uuid())
+  query       String
+  resultCount Int      @default(0)
+  userId      String?
+  createdAt   DateTime @default(now())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([query])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("search_history")
+}
+
+model ActivityLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  userName     String?
+  userEmail    String?
+  userRole     String?
+  type         String
+  action       String
+  description  String
+  targetType   String?
+  targetId     String?
+  targetName   String?
+  changes      Json?
+  metadata     Json?
+  status       String   @default("success")
+  errorMessage String?
+  timestamp    DateTime @default(now())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([action])
+  @@index([timestamp])
+  @@map("activity_logs")
+}
+
+model Stock {
+  id                String   @id @default(uuid())
+  productId         String   @unique
+  quantity          Decimal  @default(0) @db.Decimal(10, 3)  // Float stok (kg, metre vb. için)
+  reservedQuantity  Decimal  @default(0) @db.Decimal(10, 3)
+  lowStockThreshold Decimal  @default(10) @db.Decimal(10, 3)
+  minStock          Decimal? @db.Decimal(10, 3)  // Minimum stok uyarı seviyesi
+  unit              String   @default("adet")     // adet | kg | metre | litre
+  updatedAt         DateTime @updatedAt
+  tenantId          String
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("stocks")
+}
+
+model ProductStats {
+  id        String   @id @default(uuid())
+  productId String   @unique
+  views     Int      @default(0)
+  addToCart Int      @default(0)
+  sales     Int      @default(0)
+  revenue   Decimal  @default(0) @db.Decimal(10, 2)
+  updatedAt DateTime @updatedAt
+  tenantId  String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_stats")
+}
+
+model AbandonedCart {
+  id             String    @id @default(uuid())
+  userId         String?
+  sessionId      String
+  cartData       Json
+  status         String    @default("abandoned")
+  reminderSentAt DateTime?
+  recoveredAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([status])
+  @@map("abandoned_carts")
+}
+
+model DiscountRule {
+  id           String   @id @default(uuid())
+  name         String
+  type         String
+  priority     Int
+  conditions   Json
+  discount     Json
+  usageLimit   Int?
+  usagePerUser Int?
+  currentUsage Int      @default(0)
+  stackable    Boolean  @default(false)
+  excludesWith Json?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([isActive])
+  @@index([priority])
+  @@map("discount_rules")
+}
+
+model B2BProfile {
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  companyName    String
+  taxNumber      String
+  taxOffice      String
+  discountRate   Decimal   @default(0) @db.Decimal(5, 2)
+  priceGroup     String?
+  paymentTerms   Int       @default(0)
+  creditLimit    Decimal   @default(0) @db.Decimal(10, 2)
+  currentDebt    Decimal   @default(0) @db.Decimal(10, 2)
+  minOrderAmount Decimal   @default(0) @db.Decimal(10, 2)
+  maxOrderAmount Decimal?  @db.Decimal(10, 2)
+  status         String    @default("pending")
+  approvedAt     DateTime?
+  approvedBy     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("b2b_profiles")
+}
+
+model SyncHistory {
+  id             String   @id @default(uuid())
+  type           String
+  status         String
+  itemsProcessed Int      @default(0)
+  itemsFailed    Int      @default(0)
+  startedAt      DateTime
+  completedAt    DateTime
+  error          String?
+  metadata       Json?
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([status])
+  @@index([startedAt])
+  @@map("sync_histories")
+}
+
+model ImportLog {
+  id          String    @id @default(uuid())
+  filename    String
+  type        String
+  status      String
+  totalRows   Int       @default(0)
+  successRows Int       @default(0)
+  failedRows  Int       @default(0)
+  errors      Json?
+  startedAt   DateTime
+  completedAt DateTime?
+  createdBy   String
+  tenantId    String
+  creator     User      @relation(fields: [createdBy], references: [id])
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([status])
+  @@index([createdBy])
+  @@map("import_logs")
+}
+
+// ─── Brand (Marka yönetimi) ───────────────────────────────────────────────────
+
+model Brand {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String
+  description String?
+  logoUrl     String?
+  website     String?
+  isActive    Boolean  @default(true)
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("brands")
+}
+
+model Popup {
+  id          String   @id @default(uuid())
+  title       String
+  content     String   @db.Text
+  triggerType String   @default("time") // time | exit_intent | scroll
+  triggerValue Int     @default(3000)   // milliseconds for time, percentage for scroll
+  isActive    Boolean  @default(true)
+  buttonText  String?  @default("Kapat")
+  buttonLink  String?
+  imageUrl    String?
+  position    String   @default("center") // center | top | bottom
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, isActive])
+  @@map("popups")
+}
+
+model ShippingRule {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  priority    Int      @default(0)
+  
+  // Conditions
+  minOrderAmount Decimal? @db.Decimal(10, 2)
+  maxOrderAmount Decimal? @db.Decimal(10, 2)
+  cities         String[] // Array of city names
+  excludedCities String[] // Cities to exclude
+  
+  // Pricing
+  shippingCost   Decimal  @db.Decimal(10, 2)
+  freeShippingThreshold Decimal? @db.Decimal(10, 2)
+  
+  // Advanced
+  calculationType String @default("fixed") // fixed | percentage | weight_based
+  percentageRate  Decimal? @db.Decimal(5, 2)
+  weightRanges    Json?   // [{min: 0, max: 5, cost: 10}, ...]
+  
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, isActive, priority])
+  @@map("shipping_rules")
+}
+
+model Store {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String
+  description String?
+  
+  // Contact Info
+  email       String?
+  phone       String?
+  address     String?
+  city        String?
+  country     String?  @default("TR")
+  
+  // Settings
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  
+  // Metadata
+  logo        String?
+  settings    Json?    // Custom settings per store
+  
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products    Product[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([slug, tenantId])
+  @@index([tenantId, isActive])
+  @@map("stores")
+}
+
+model ProductTranslation {
+  id          String   @id @default(uuid())
+  productId   String
+  language    String   // tr, en, de, fr, etc.
+  
+  // Translated fields
+  name        String
+  description String?
+  slug        String?
+  
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+  metaKeywords    String?
+  
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([productId, language])
+  @@index([productId])
+  @@index([language])
+  @@map("product_translations")
+}
+
+model ExchangeRate {
+  id          String   @id @default(uuid())
+  baseCurrency String  @default("TRY") // Base currency (TRY)
+  targetCurrency String              // USD, EUR, GBP, etc.
+  rate        Decimal  @db.Decimal(18, 6) // Exchange rate
+  
+  // Metadata
+  source      String?  // API source (tcmb, exchangerate-api, etc.)
+  lastUpdated DateTime @default(now())
+  
+  tenantId    String?  // Optional: tenant-specific rates
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([baseCurrency, targetCurrency, tenantId])
+  @@index([targetCurrency])
+  @@index([lastUpdated])
+  @@map("exchange_rates")
+}
+
+model Wishlist {
+  id        String         @id @default(uuid())
+  userId    String         @unique
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  tenantId  String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items     WishlistItem[]
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("wishlists")
+}
+
+model WishlistItem {
+  id         String   @id @default(uuid())
+  wishlistId String
+  productId  String
+  variantId  String?
+  createdAt  DateTime @default(now())
+  wishlist   Wishlist        @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant    ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([wishlistId, productId, variantId])
+  @@index([wishlistId])
+  @@index([productId])
+  @@map("wishlist_items")
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELED
+}
+
+enum UserRole {
+  OWNER        // Full access
+  ADMIN        // Most access
+  STAFF        // Limited access
+  USER         // Customer/basic user
+}
+
+enum Plan {
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum NotificationType {
+  ORDER_CREATED
+  ORDER_STATUS_CHANGED
+  STOCK_LOW
+  STOCK_OUT
+  SYSTEM_MESSAGE
+  PAYMENT_RECEIVED
+  PAYMENT_FAILED
+  SUBSCRIPTION_ACTIVATED
+  SUBSCRIPTION_CANCELED
+  TRIAL_ENDING_SOON
+  TRIAL_EXPIRED
+  TENANT_SUSPENDED
+  USER_BANNED
+}
+
+enum CampaignType {
+  PERCENTAGE_DISCOUNT
+  FIXED_DISCOUNT
+  BUY_X_GET_Y
+  CATEGORY_DISCOUNT
+}
+
+enum CampaignRuleType {
+  PRODUCT_DISCOUNT
+  CART_DISCOUNT
+  BUY_X_GET_Y
+  BULK_DISCOUNT
+}
+
+enum LogType {
+  USER_ACTION
+  ERROR
+  SYSTEM
+}
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum SyncType {
+  PRODUCT
+  ORDER
+  STOCK
+}
+
+enum MarketplaceProvider {
+  TRENDYOL
+  HEPiburada
+  N11
+  AMAZON
+}
+
+enum MarketplaceSyncStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  RETRYING
+}
+
+model MarketplaceAccount {
+  id            Int      @id @default(autoincrement())
+  tenantId      String
+  provider      MarketplaceProvider
+  apiKey        String
+  apiSecret     String
+  sellerId      String
+  isActive      Boolean  @default(true)
+  lastSyncAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productMaps   MarketplaceProductMap[]
+  orders        MarketplaceOrder[]
+
+  @@unique([tenantId, provider])
+  @@map("marketplace_accounts")
+}
+
+model MarketplaceProductMap {
+  id            Int      @id @default(autoincrement())
+  tenantId      String
+  productId     String
+  marketplace   MarketplaceProvider
+  externalId    String
+  barcode       String?
+  isActive      Boolean  @default(true)
+  lastSyncAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  account       MarketplaceAccount @relation(fields: [tenantId, marketplace], references: [tenantId, provider])
+
+  @@unique([tenantId, marketplace, externalId])
+  @@unique([productId, marketplace])
+  @@map("marketplace_product_maps")
+}
+
+model MarketplaceOrder {
+  id            Int      @id @default(autoincrement())
+  tenantId      String
+  externalId    String
+  marketplace   MarketplaceProvider
+  status        String
+  customerEmail String
+  customerName  String
+  totalAmount   Decimal  @db.Decimal(10, 2)
+  currency      String   @default("TRY")
+  rawData       Json
+  isProcessed   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account       MarketplaceAccount @relation(fields: [tenantId, marketplace], references: [tenantId, provider])
+
+  @@unique([tenantId, marketplace, externalId])
+  @@unique([externalId, marketplace])
+  @@map("marketplace_orders")
+}
+
+model MarketplaceSyncLog {
+  id            Int      @id @default(autoincrement())
+  tenantId      String
+  marketplace   MarketplaceProvider
+  syncType      SyncType
+  status        MarketplaceSyncStatus
+  entityId      String?  // product ID, order ID etc.
+  externalId    String?
+  errorMessage  String?
+  retryCount    Int      @default(0)
+  rawData       Json?
+  createdAt     DateTime @default(now())
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, marketplace, syncType, status])
+  @@map("marketplace_sync_logs")
+}
+
+model MarketplaceCategory {
+  id            Int      @id @default(autoincrement())
+  marketplace   MarketplaceProvider
+  externalId    String
+  name          String
+  parentId      String?
+  level         Int
+  isActive      Boolean  @default(true)
+  attributes    Json?    // category attributes
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([marketplace, externalId])
+  @@map("marketplace_categories")
+}
+
+model MarketplaceAttribute {
+  id            Int      @id @default(autoincrement())
+  marketplace   MarketplaceProvider
+  categoryId    String
+  name          String
+  type          String   // text, number, boolean, select
+  required      Boolean  @default(false)
+  options       Json?    // for select type
+  createdAt     DateTime @default(now())
+
+  @@unique([marketplace, categoryId, name])
+  @@map("marketplace_attributes")
+}
+
+enum SyncStatus {
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+// ─── Billing ─────────────────────────────────────────────────────────────────
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  CANCELED
+  EXPIRED
+  PAST_DUE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+model Subscription {
+  id           String             @id @default(uuid())
+  tenantId     String
+  userId       String
+  plan         Plan
+  billingCycle BillingCycle       @default(MONTHLY)
+  status       SubscriptionStatus @default(PENDING)
+  startDate    DateTime           @default(now())
+  endDate      DateTime
+  canceledAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments Payment[]
+  invoices Invoice[]
+
+  @@index([tenantId, status])
+  @@index([endDate])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  tenantId       String
+  subscriptionId String
+  userId         String
+  amount         Decimal       @db.Decimal(10, 2)
+  currency       String        @default("TRY")
+  status         PaymentStatus @default(PENDING)
+  provider       String        @default("iyzico")
+  transactionId  String?
+  iyzicoToken    String?       @unique
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices     Invoice[]
+
+  @@index([tenantId])
+  @@index([iyzicoToken])
+  @@map("payments")
+}
+
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+}
+
+enum InvoiceType {
+  SUBSCRIPTION      // normal dönem faturası
+  UPGRADE_PRORATION // upgrade farkı (pro-rate)
+  DOWNGRADE_CREDIT  // downgrade alacak notu (negatif tutar)
+  MANUAL            // admin el ile oluşturdu
+}
+
+model Invoice {
+  id             String        @id @default(uuid())
+  tenantId       String
+  subscriptionId String?
+  paymentId      String?
+  type           InvoiceType   @default(SUBSCRIPTION)
+  status         InvoiceStatus @default(DRAFT)
+  number         String        @unique
+  currency       String        @default("TRY")
+  subtotal       Decimal       @db.Decimal(10, 2)
+  tax            Decimal       @default(0) @db.Decimal(10, 2)
+  total          Decimal       @db.Decimal(10, 2)
+  description    String?
+  lineItems      Json          @default("[]")
+  dueDate        DateTime?
+  paidAt         DateTime?
+  voidedAt       DateTime?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  payment      Payment?      @relation(fields: [paymentId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("invoices")
+}
+
+// ─── Feature Flags ───────────────────────────────────────────────────────────
+
+model Feature {
+  id          String          @id @default(uuid())
+  key         String          @unique
+  name        String
+  description String?
+  category    String          @default("general")
+  defaultOn   Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  tenantFeatures TenantFeature[]
+
+  @@map("features")
+}
+
+model TenantFeature {
+  id        String   @id @default(uuid())
+  tenantId  String
+  featureId String
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, featureId])
+  @@index([tenantId])
+  @@map("tenant_features")
+}
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+
+  // Who
+  userId     String?       // null = system / cron
+  userEmail  String?
+  userRole   String?       // USER | ADMIN | SUPER_ADMIN | system
+  tenantId   String?       // null = platform-level action
+
+  // Backward compat aliases (kept for existing queries)
+  adminId    String?
+  adminEmail String?
+
+  // What
+  action     String        // e.g. LOGIN, ORDER_CREATED, SUBSCRIPTION_CANCELED
+  category   String        @default("GENERAL")  // AUTH | BILLING | ORDER | TENANT | USER | SYSTEM
+  targetType String        // e.g. User, Tenant, Order, Subscription, Payment
+  targetId   String        @default("")
+  targetName String?
+
+  // Result
+  status     String        @default("SUCCESS")  // SUCCESS | FAILURE | WARNING
+  errorMsg   String?
+
+  // Context
+  ipAddress  String?
+  userAgent  String?
+  details    Json?         // full payload / diff
+
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([action])
+  @@index([category])
+  @@index([status])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ── Trendyol Integration Logs ─────────────────────────────────────────────────
+model IntegrationLog {
+  id              String   @id @default(uuid())
+  tenantId        String
+  productId       String?
+  productName     String?
+  batchId         String?
+  status          String   // 'pending' | 'sending' | 'success' | 'error' | 'skipped'
+  message         String?
+  requestPayload  Json?
+  responsePayload Json?
+  createdAt       DateTime @default(now())
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+  @@index([tenantId, batchId])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("integration_logs")
+}
+
+// ─── Trendyol Ürün Bazlı Ayarlar ─────────────────────────────────────────────
+// Her ürün için ayrı kategori / marka / özellik / fiyat stratejisi override'ı.
+// isOverride=false ise toplu ayarlar kullanılır; true ise bu kayıt önceliklidir.
+
+model TrendyolProductSettings {
+  id               String   @id @default(uuid())
+  tenantId         String
+  productId        String   @unique            // Bir ürüne tek kayıt
+  trendyolCategoryId String?                   // Trendyol kategori ID (string)
+  trendyolBrandId    Int?                      // Trendyol marka ID
+  attributes       Json     @default("{}")     // { "attrId": valueId | "customValue" }
+  priceType        String   @default("none")   // none | percentage | fixed
+  priceValue       Decimal  @default(0) @db.Decimal(10, 2)
+  cargoCompanyId   Int?
+  deliveryDuration Int?
+  vatRate          Int      @default(18)
+  isOverride       Boolean  @default(true)     // true = bu ayarlar geçerli
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("trendyol_product_settings")
+}
+
+// ─── Trendyol Fiyat/Stok Sync Queue ─────────────────────────────────────────
+// Her fiyat/stok değişikliğinde bu kuyruğa eklenir.
+// Worker her 2 dakikada tenant bazında max 100'lük batchler halinde Trendyol'a gönderir.
+
+model TrendyolSyncQueue {
+  id          String   @id @default(uuid())
+  tenantId    String
+  barcode     String
+  listPrice   Decimal  @db.Decimal(10, 2)
+  salePrice   Decimal  @db.Decimal(10, 2)
+  quantity    Int
+  status      String   @default("pending")   // pending | processing | success | error
+  errorMsg    String?
+  attempts    Int      @default(0)           // kaç kez denendi
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, barcode])
+  @@index([status, createdAt])
+  @@map("trendyol_sync_queue")
+}
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  name        String
+  key         String   @unique
+  prefix      String
+  
+  rateLimit   Int      @default(100)
+  requestCount Int     @default(0)
+  lastReset   DateTime @default(now())
+  
+  permissions Json?
+  
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  
+  tenantId    String
+  userId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([key])
+  @@index([prefix])
+  @@map("api_keys")
 }

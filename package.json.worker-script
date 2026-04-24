@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "worker": "ts-node src/worker.ts",
+    "worker:dev": "nodemon --watch src --exec ts-node src/worker.ts",
+    "worker:build": "tsc && node dist/worker.js"
+  }
+}
