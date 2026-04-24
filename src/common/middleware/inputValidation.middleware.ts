@@ -287,12 +287,7 @@ export class InputValidator {
     return true;
   };
 
-  static validateEmail = (email: string): boolean {
-    const emailRegex = /^[^\s*[^@\s]+@[^@\s]+\s*$/;
-    return emailRegex.test(email);
-  };
-
-  static validatePhone = (phone: string): boolean => {
+  static validatePhone = (phone: string): boolean {
     // Turkish phone number format
     const phoneRegex = /^(\+90|053\d{8}|053\d{8}|054\d{8}|055\d{8}|053\d{9}|054\d{9}|053\d{9}|053\d{7}|054\d{7}|055\d{7})\d{8}$/;
     return phoneRegex.test(phone);

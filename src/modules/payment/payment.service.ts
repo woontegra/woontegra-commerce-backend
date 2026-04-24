@@ -324,8 +324,8 @@ export class PaymentService {
           }
         },
         paymentMethod: true
-        },
-        orderBy: { createdAt: 'desc' }
+      },
+      orderBy: { createdAt: 'desc' }
       });
 
       const invoices = await prisma.invoice.findMany({

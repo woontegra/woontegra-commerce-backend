@@ -34,380 +34,224 @@ export class ErrorLogger {
   private static maxLogFiles = 10;
 
   static {
-    error(message: string, error?: Error, metadata?: Record<string, any>) {
-      this.log('error', message, error, metadata);
-    },
+    this.ensureLogDir();
+  }
 
-    warn(message: string, metadata?: Record<string, any>) {
-      this.log('warn', message, undefined, metadata);
-    },
-
-    info(message: string, metadata?: Record<string, any>) {
-      this.log('info', message, undefined, metadata);
-    },
-
-    debug(message: string, metadata?: Record<string, any>) {
-      this.log('debug', message, undefined, metadata);
-    },
-
-    logRequest(req: Request, res: Response, duration?: number) {
-      const metadata = {
-        method: req.method,
-        path: req.originalUrl,
-        statusCode: res.statusCode,
-        duration,
-        userAgent: req.get('User-Agent'),
-        ip: req.ip,
-        userId: (req as any).user?.id
-      };
-
-      if (res.statusCode >= 400) {
-        this.log('warn', `HTTP ${res.statusCode} - ${req.method} ${req.originalUrl}`, undefined, metadata);
-      } else {
-        this.log('info', `HTTP ${res.statusCode} - ${req.method} ${req.originalUrl}`, undefined, metadata);
-      }
-    },
-
-    logError(req: Request, error: Error, statusCode?: number) {
-      const metadata = {
-        method: req.method,
-        path: req.originalUrl,
-        statusCode,
-        userAgent: req.get('User-Agent'),
-        ip: req.ip,
-        userId: (req as any).user?.id,
-        stack: error.stack
-      };
-
-      this.log('error', error.message, error, metadata);
+  private static ensureLogDir(): void {
+    if (!fs.existsSync(this.logDir)) {
+      fs.mkdirSync(this.logDir, { recursive: true });
     }
-  };
+  }
 
-  private static log(level: LogEntry['level'], message: string, error?: Error, metadata?: Record<string, any>) {
+  static log(level: 'error' | 'warn' | 'info' | 'debug', message: string, error?: Error, metadata?: Record<string, any>): void {
     const logEntry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
       message,
       stack: error?.stack,
-      metadata
+      metadata,
     };
 
-    // Write to file
-    this.writeToFile(logEntry);
-    
-    // Also log to console in development
-    if (process.env.NODE_ENV === 'development') {
-      const logMessage = `[${logEntry.timestamp}] ${level.toUpperCase()}: ${message}`;
-      if (error) {
-        console.error(logMessage, error);
-      } else {
-        console.log(logMessage);
-      }
-    }
-  }
+    const logFile = path.join(this.logDir, `app-${new Date().toISOString().split('T')[0]}.log`);
+    const logLine = JSON.stringify(logEntry) + '\n';
 
-  private static writeToFile(logEntry: LogEntry) {
     try {
-      // Ensure log directory exists
-      if (!fs.existsSync(this.logDir)) {
-        fs.mkdirSync(this.logDir, { recursive: true });
-      }
-
-      // Create log file for current date
-      const today = new Date().toISOString().split('T')[0];
-      const logFile = path.join(this.logDir, `app-${today}.log`);
-      
-      // Format log entry
-      const logLine = JSON.stringify(logEntry) + '\n';
-      
-      // Check file size and rotate if necessary
-      if (fs.existsSync(logFile)) {
-        const stats = fs.statSync(logFile);
-        if (stats.size > this.maxFileSize) {
-          this.rotateLogFile(logFile);
-        }
-      }
-      
-      // Append to log file
       fs.appendFileSync(logFile, logLine);
-      
-      // Clean up old log files
-      this.cleanupOldLogs();
-    } catch (error) {
-      console.error('Failed to write to log file:', error);
+      this.rotateLogIfNeeded(logFile);
+    } catch (err) {
+      console.error('Failed to write log:', err);
     }
   }
 
-  private static rotateLogFile(currentLogFile: string) {
+  static error(message: string, error?: Error, metadata?: Record<string, any>): void {
+    this.log('error', message, error, metadata);
+  }
+
+  static warn(message: string, metadata?: Record<string, any>): void {
+    this.log('warn', message, undefined, metadata);
+  }
+
+  static info(message: string, metadata?: Record<string, any>): void {
+    this.log('info', message, undefined, metadata);
+  }
+
+  static debug(message: string, metadata?: Record<string, any>): void {
+    this.log('debug', message, undefined, metadata);
+  }
+
+  private static rotateLogIfNeeded(logFile: string): void {
     try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const rotatedFile = currentLogFile.replace('.log', `-${timestamp}.log`);
-      fs.renameSync(currentLogFile, rotatedFile);
-    } catch (error) {
-      console.error('Failed to rotate log file:', error);
+      const stats = fs.statSync(logFile);
+      if (stats.size > this.maxFileSize) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const rotatedFile = logFile.replace('.log', `-${timestamp}.log`);
+        fs.renameSync(logFile, rotatedFile);
+        this.cleanOldLogs();
+      }
+    } catch (err) {
+      console.error('Failed to rotate log:', err);
     }
   }
 
-  private static cleanupOldLogs() {
+  private static cleanOldLogs(): void {
     try {
       const files = fs.readdirSync(this.logDir)
-        .filter(file => file.startsWith('app-') && file.endsWith('.log'))
+        .filter(file => file.endsWith('.log'))
         .map(file => ({
           name: file,
           path: path.join(this.logDir, file),
-          mtime: fs.statSync(path.join(this.logDir, file)).mtime
+          mtime: fs.statSync(path.join(this.logDir, file)).mtime,
         }))
         .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 
-      // Remove oldest files if we have too many
       if (files.length > this.maxLogFiles) {
         const filesToDelete = files.slice(this.maxLogFiles);
         filesToDelete.forEach(file => {
-          fs.unlinkSync(file.path);
+          try {
+            fs.unlinkSync(file.path);
+          } catch (err) {
+            console.error('Failed to delete old log file:', file.name, err);
+          }
         });
       }
-    } catch (error) {
-      console.error('Failed to cleanup old logs:', error);
+    } catch (err) {
+      console.error('Failed to clean old logs:', err);
     }
   }
 
-  static async getLogs(filter: LogFilter = {}): Promise<{
-    logs: LogEntry[];
-    total: number;
-    hasMore: boolean;
-  }> {
+  static async getLogs(filter: LogFilter = {}): Promise<{ logs: LogEntry[], total: number }> {
     try {
-      const { level, startDate, endDate, userId, search, limit = 100, offset = 0 } = filter;
-      
-      // Get all log files
-      const files = fs.readdirSync(this.logDir)
-        .filter(file => file.startsWith('app-') && file.endsWith('.log'))
-        .sort((a, b) => b.localeCompare(a)); // Sort descending
-      
+      const logFiles = fs.readdirSync(this.logDir)
+        .filter(file => file.endsWith('.log'))
+        .sort()
+        .reverse();
+
       let allLogs: LogEntry[] = [];
-      
-      // Read and parse log files
-      for (const file of files) {
+
+      for (const file of logFiles) {
+        const filePath = path.join(this.logDir, file);
         try {
-          const filePath = path.join(this.logDir, file);
-          const content = fs.readFileSync(filePath, 'utf8');
-          const fileLogs = content
-            .split('\n')
-            .filter(line => line.trim())
-            .map(line => {
-              try {
-                return JSON.parse(line);
-              } catch {
-                return null;
-              }
-            })
-            .filter(log => log !== null);
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const lines = content.trim().split('\n').filter(line => line);
           
-          allLogs = [...allLogs, ...fileLogs];
-        } catch (error) {
-          console.error(`Failed to read log file ${file}:`, error);
+          for (const line of lines) {
+            try {
+              const log = JSON.parse(line) as LogEntry;
+              
+              // Apply filters
+              if (filter.level && log.level !== filter.level) continue;
+              if (filter.startDate && log.timestamp < filter.startDate) continue;
+              if (filter.endDate && log.timestamp > filter.endDate) continue;
+              if (filter.userId && log.metadata?.userId !== filter.userId) continue;
+              if (filter.search && !log.message.toLowerCase().includes(filter.search.toLowerCase())) continue;
+              
+              allLogs.push(log);
+            } catch (parseErr) {
+              // Skip invalid log lines
+              continue;
+            }
+          }
+        } catch (err) {
+          console.error('Failed to read log file:', file, err);
+          continue;
         }
       }
-      
-      // Apply filters
-      let filteredLogs = allLogs;
-      
-      // Filter by level
-      if (level) {
-        filteredLogs = filteredLogs.filter(log => log.level === level);
-      }
-      
-      // Filter by date range
-      if (startDate) {
-        const start = new Date(startDate);
-        filteredLogs = filteredLogs.filter(log => new Date(log.timestamp) >= start);
-      }
-      
-      if (endDate) {
-        const end = new Date(endDate);
-        filteredLogs = filteredLogs.filter(log => new Date(log.timestamp) <= end);
-      }
-      
-      // Filter by user ID
-      if (userId) {
-        filteredLogs = filteredLogs.filter(log => log.userId === userId);
-      }
-      
-      // Filter by search term
-      if (search) {
-        const searchLower = search.toLowerCase();
-        filteredLogs = filteredLogs.filter(log => 
-          log.message.toLowerCase().includes(searchLower) ||
-          log.level.toLowerCase().includes(searchLower) ||
-          (log.stack && log.stack.toLowerCase().includes(searchLower))
-        );
-      }
-      
+
       // Sort by timestamp (newest first)
-      filteredLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      
+      allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
       // Apply pagination
-      const total = filteredLogs.length;
-      const paginatedLogs = filteredLogs.slice(offset, offset + limit);
-      const hasMore = offset + limit < total;
-      
+      const limit = filter.limit || 100;
+      const offset = filter.offset || 0;
+      const paginatedLogs = allLogs.slice(offset, offset + limit);
+
       return {
         logs: paginatedLogs,
-        total,
-        hasMore
+        total: allLogs.length,
       };
-    } catch (error) {
-      console.error('Failed to get logs:', error);
-      return {
-        logs: [],
-        total: 0,
-        hasMore: false
-      };
+    } catch (err) {
+      console.error('Failed to get logs:', err);
+      return { logs: [], total: 0 };
     }
   }
 
   static async getLogStats(): Promise<{
     totalLogs: number;
-    logsByLevel: Record<string, number>;
-    logsByHour: Record<string, number>;
-    recentErrors: LogEntry[];
+    errorCount: number;
+    warnCount: number;
+    infoCount: number;
+    debugCount: number;
+    latestError?: LogEntry;
   }> {
     try {
-      const { logs } = await this.getLogs({ limit: 10000 }); // Get last 10k logs
+      const { logs, total } = await this.getLogs({ limit: 1000 });
       
-      const logsByLevel: Record<string, number> = {
-        error: 0,
-        warn: 0,
-        info: 0,
-        debug: 0
+      const stats = {
+        totalLogs: total,
+        errorCount: logs.filter(log => log.level === 'error').length,
+        warnCount: logs.filter(log => log.level === 'warn').length,
+        infoCount: logs.filter(log => log.level === 'info').length,
+        debugCount: logs.filter(log => log.level === 'debug').length,
+        latestError: logs.find(log => log.level === 'error'),
       };
-      
-      const logsByHour: Record<string, number> = {};
-      
-      logs.forEach(log => {
-        logsByLevel[log.level] = (logsByLevel[log.level] || 0) + 1;
-        
-        const hour = new Date(log.timestamp).getHours().toString();
-        logsByHour[hour] = (logsByHour[hour] || 0) + 1;
-      });
-      
-      const recentErrors = logs
-        .filter(log => log.level === 'error')
-        .slice(0, 10);
-      
-      return {
-        totalLogs: logs.length,
-        logsByLevel,
-        logsByHour,
-        recentErrors
-      };
-    } catch (error) {
-      console.error('Failed to get log stats:', error);
+
+      return stats;
+    } catch (err) {
+      console.error('Failed to get log stats:', err);
       return {
         totalLogs: 0,
-        logsByLevel: {},
-        logsByHour: {},
-        recentErrors: []
+        errorCount: 0,
+        warnCount: 0,
+        infoCount: 0,
+        debugCount: 0,
       };
     }
   }
 
-  static async clearLogs(): Promise<{ success: boolean; message: string }> {
+  static async clearLogs(): Promise<void> {
     try {
-      const files = fs.readdirSync(this.logDir)
-        .filter(file => file.startsWith('app-') && file.endsWith('.log'));
-      
+      const files = fs.readdirSync(this.logDir);
       for (const file of files) {
         const filePath = path.join(this.logDir, file);
-        fs.unlinkSync(filePath);
+        try {
+          fs.unlinkSync(filePath);
+        } catch (err) {
+          console.error('Failed to delete log file:', file, err);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to clear logs:', err);
+    }
+  }
+
+  static async exportLogs(filter: LogFilter = {}): Promise<string> {
+    try {
+      const { logs } = await this.getLogs(filter);
+      
+      // Convert to CSV format
+      const headers = ['Timestamp', 'Level', 'Message', 'User ID', 'IP', 'Path', 'Method', 'Status Code'];
+      const csvLines = [headers.join(',')];
+      
+      for (const log of logs) {
+        const row = [
+          log.timestamp,
+          log.level,
+          `"${log.message.replace(/"/g, '""')}"`,
+          log.metadata?.userId || '',
+          log.ip || '',
+          log.path || '',
+          log.method || '',
+          log.statusCode?.toString() || '',
+        ];
+        csvLines.push(row.join(','));
       }
       
-      return {
-        success: true,
-        message: `Cleared ${files.length} log files`
-      };
-    } catch (error) {
-      console.error('Failed to clear logs:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Failed to clear logs'
-      };
+      return csvLines.join('\n');
+    } catch (err) {
+      console.error('Failed to export logs:', err);
+      return '';
     }
   }
 }
 
-export const getLogs = async (req: Request, res: Response) => {
-  try {
-    const user = (req as any).user;
-    if (!user || user.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const result = await ErrorLogger.getLogs(req.query);
-    
-    res.json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    console.error('Failed to get logs:', error);
-    res.status(500).json({ error: 'Failed to get logs' });
-  }
-};
-
-export const getLogStats = async (req: Request, res: Response) => {
-  try {
-    const user = (req as any).user;
-    if (!user || user.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const stats = await ErrorLogger.getLogStats();
-    
-    res.json({
-      success: true,
-      data: stats
-    });
-  } catch (error) {
-    console.error('Failed to get log stats:', error);
-    res.status(500).json({ error: 'Failed to get log stats' });
-  }
-};
-
-export const clearLogs = async (req: Request, res: Response) => {
-  try {
-    const user = (req as any).user;
-    if (!user || user.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const result = await ErrorLogger.clearLogs();
-    
-    res.json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    console.error('Failed to clear logs:', error);
-    res.status(500).json({ error: 'Failed to clear logs' });
-  }
-};
-
-export const downloadLogs = async (req: Request, res: Response) => {
-  try {
-    const user = (req as any).user;
-    if (!user || user.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    const { logs } = await ErrorLogger.getLogs(req.query);
-    const logContent = logs.map(log => JSON.stringify(log)).join('\n');
-    
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="logs-${new Date().toISOString().split('T')[0]}.json"`);
-    res.send(logContent);
-  } catch (error) {
-    console.error('Failed to download logs:', error);
-    res.status(500).json({ error: 'Failed to download logs' });
-  }
-};
+export default ErrorLogger;
