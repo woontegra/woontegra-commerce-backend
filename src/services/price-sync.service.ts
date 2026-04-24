@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../config/logger';
-import { MarketplaceSyncFactory, StockSyncItem } from './marketplace-sync.service';
 
 const prisma = new PrismaClient();
 
@@ -28,373 +27,289 @@ export interface PriceSyncResult {
 }
 
 export interface PriceStrategy {
-  mode: 'none' | 'percent' | 'fixed';
+  name: string;
+  type: 'fixed' | 'percentage' | 'formula';
   value: number;
-  currency: string;
-  roundTo: number;
+  minPrice?: number;
+  maxPrice?: number;
 }
 
-/**
- * Price Sync Service
- */
 export class PriceSyncService {
   /**
-   * Get products with pricing for sync
+   * Sync prices to all marketplaces for a tenant
    */
-  static async getPricedProducts(tenantId: string, productIds?: string[]): Promise<PriceSyncItem[]> {
-    const whereClause: any = {
-      tenantId,
-      isActive: true,
-    };
-
-    if (productIds && productIds.length > 0) {
-      whereClause.id = { in: productIds };
-    }
-
-    const products = await prisma.product.findMany({
-      where: whereClause,
-      include: {
-        pricing: true,
-        marketplaceProductMaps: {
-          where: {
-            marketplace: {
-              isActive: true,
-            },
-          },
-        },
-      },
-    });
-
-    return products.map(product => ({
-      productId: product.id,
-      sku: product.sku || undefined,
-      barcode: product.barcode || undefined,
-      price: product.pricing?.salePrice || 0,
-      discountPrice: product.pricing?.discountPrice || undefined,
-      marketplaceProductId: product.marketplaceProductMaps[0]?.marketplaceProductId,
-      marketplaceSku: product.marketplaceProductMaps[0]?.marketplaceSku,
-    }));
-  }
-
-  /**
-   * Apply price strategy
-   */
-  static applyPriceStrategy(basePrice: number, strategy: PriceStrategy): number {
-    let finalPrice = basePrice;
-
-    switch (strategy.mode) {
-      case 'percent':
-        finalPrice = basePrice * (1 + strategy.value / 100);
-        break;
-      case 'fixed':
-        finalPrice = basePrice + strategy.value;
-        break;
-      case 'none':
-      default:
-        finalPrice = basePrice;
-        break;
-    }
-
-    // Round to specified precision
-    const factor = Math.pow(10, strategy.roundTo);
-    finalPrice = Math.round(finalPrice * factor) / factor;
-
-    return Math.max(0, finalPrice);
-  }
-
-  /**
-   * Get marketplace price strategy
-   */
-  static async getMarketplacePriceStrategy(
+  static async syncPricesToMarketplaces(
     tenantId: string,
-    marketplaceId: string
-  ): Promise<PriceStrategy> {
-    const marketplace = await prisma.marketplaceAccount.findFirst({
-      where: {
-        id: marketplaceId,
-        tenantId,
-        isActive: true,
-      },
-      select: {
-        settings: true,
-      },
-    });
-
-    const settings = marketplace?.settings as any;
-    
-    return {
-      mode: settings?.priceStrategy?.mode || 'none',
-      value: settings?.priceStrategy?.value || 0,
-      currency: settings?.priceStrategy?.currency || 'TRY',
-      roundTo: settings?.priceStrategy?.roundTo || 2,
-    };
-  }
-
-  /**
-   * Sync prices to all active marketplaces
-   */
-  static async syncAllMarketplaces(
-    tenantId: string,
-    productIds?: string[]
+    productIds?: string[],
+    marketplaceIds?: string[]
   ): Promise<PriceSyncResult[]> {
-    const marketplaces = await prisma.marketplaceAccount.findMany({
-      where: {
-        tenantId,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        isActive: true,
-        credentials: true,
-        settings: true,
-      },
-    });
-
+    const startTime = Date.now();
     const results: PriceSyncResult[] = [];
 
-    for (const marketplace of marketplaces) {
-      try {
-        const result = await this.syncMarketplace(tenantId, marketplace.id, productIds);
-        results.push(result);
-      } catch (error: any) {
-        logger.error('[PriceSync] Marketplace sync failed', {
+    try {
+      // Get active marketplaces
+      const marketplaces = await prisma.marketplace.findMany({
+        where: {
           tenantId,
-          marketplaceId: marketplace.id,
-          marketplaceName: marketplace.name,
-          error: error.message,
-        });
+          isActive: true,
+          ...(marketplaceIds?.length && { id: { in: marketplaceIds } }),
+        },
+      });
 
-        results.push({
-          marketplaceId: marketplace.id,
-          marketplaceName: marketplace.name,
-          total: 0,
-          succeeded: 0,
-          failed: 0,
-          errors: [],
-          duration: 0,
-        });
+      if (marketplaces.length === 0) {
+        logger.warn('No active marketplaces found for price sync', { tenantId });
+        return [];
       }
-    }
 
-    return results;
+      // Get products with their marketplace mappings
+      const products = await prisma.product.findMany({
+        where: {
+          tenantId,
+          isActive: true,
+          ...(productIds?.length && { id: { in: productIds } }),
+        },
+        include: {
+          marketplaceMappings: true,
+          prices: true,
+        },
+      });
+
+      // Sync to each marketplace
+      for (const marketplace of marketplaces) {
+        const result = await this.syncToMarketplace(
+          tenantId,
+          marketplace,
+          products
+        );
+        results.push(result);
+      }
+
+      const duration = Date.now() - startTime;
+      logger.info(`Price sync completed for ${results.length} marketplaces`, {
+        tenantId,
+        duration,
+      });
+
+      return results;
+    } catch (error) {
+      logger.error('Price sync failed:', error);
+      throw error;
+    }
   }
 
   /**
-   * Sync prices to specific marketplace
+   * Sync prices to a specific marketplace
    */
-  static async syncMarketplace(
+  private static async syncToMarketplace(
     tenantId: string,
-    marketplaceId: string,
-    productIds?: string[]
+    marketplace: any,
+    products: any[]
   ): Promise<PriceSyncResult> {
     const startTime = Date.now();
-
-    // Get marketplace info
-    const marketplace = await prisma.marketplaceAccount.findFirst({
-      where: {
-        id: marketplaceId,
-        tenantId,
-        isActive: true,
-      },
-    });
-
-    if (!marketplace) {
-      throw new Error('Marketplace not found or inactive');
-    }
-
-    // Get price strategy
-    const priceStrategy = await this.getMarketplacePriceStrategy(tenantId, marketplaceId);
-
-    // Get products
-    const products = await this.getPricedProducts(tenantId, productIds);
-
-    // Apply price strategy
-    const pricedItems = products.map(product => {
-      const finalPrice = this.applyPriceStrategy(product.price, priceStrategy);
-      const finalDiscountPrice = product.discountPrice 
-        ? this.applyPriceStrategy(product.discountPrice, priceStrategy)
-        : undefined;
-
-      return {
-        ...product,
-        price: finalPrice,
-        discountPrice: finalDiscountPrice,
-      };
-    });
-
-    // Create marketplace syncer
-    const marketplaceConfig = {
-      id: marketplace.id,
-      name: marketplace.name,
-      type: marketplace.type as any,
-      isActive: marketplace.isActive,
-      credentials: marketplace.credentials,
-      settings: marketplace.settings,
-    };
-
-    const syncer = MarketplaceSyncFactory.createSyncer(marketplaceConfig, tenantId);
-
-    // Convert to StockSyncItem format (reuse existing sync infrastructure)
-    const stockSyncItems: StockSyncItem[] = pricedItems.map(item => ({
-      productId: item.productId,
-      sku: item.sku,
-      barcode: item.barcode,
-      quantity: 0, // Not used for price sync
-      price: item.price,
-      marketplaceProductId: item.marketplaceProductId,
-      marketplaceSku: item.marketplaceSku,
-    }));
-
-    // Sync prices (reuse stock sync infrastructure)
-    const result = await syncer.updateStock(stockSyncItems);
-
-    logger.info('[PriceSync] Price sync completed', {
-      tenantId,
-      marketplaceId,
-      marketplaceName: marketplace.name,
-      total: result.total,
-      succeeded: result.succeeded,
-      failed: result.failed,
-      duration: result.duration,
-    });
-
-    return {
-      marketplaceId: marketplace.id,
-      marketplaceName: marketplace.name,
-      total: result.total,
-      succeeded: result.succeeded,
-      failed: result.failed,
-      errors: result.errors,
-      duration: result.duration,
-    };
-  }
-
-  /**
-   * Real-time price update (triggered by price changes)
-   */
-  static async handlePriceChange(
-    tenantId: string,
-    productId: string,
-    newPrice: number,
-    oldPrice: number,
-    newDiscountPrice?: number,
-    oldDiscountPrice?: number
-  ): Promise<void> {
-    // Only sync if price actually changed
-    if (newPrice === oldPrice && newDiscountPrice === oldDiscountPrice) {
-      return;
-    }
-
-    logger.info('[PriceSync] Handling price change', {
-      tenantId,
-      productId,
-      oldPrice,
-      newPrice,
-      oldDiscountPrice,
-      newDiscountPrice,
-    });
+    const errors: Array<{ productId: string; error: string }> = [];
+    let succeeded = 0;
 
     try {
-      await this.syncAllMarketplaces(tenantId, [productId]);
-    } catch (error: any) {
-      logger.error('[PriceSync] Real-time sync failed', {
-        tenantId,
-        productId,
-        error: error.message,
-      });
-      // Don't throw error to avoid blocking price update
+      for (const product of products) {
+        try {
+          // Get marketplace-specific pricing
+          const basePrice = product.prices?.[0]?.amount || product.price || 0;
+          const marketplacePrice = await this.calculateMarketplacePrice(
+            product,
+            marketplace,
+            basePrice
+          );
+
+          // Update or create marketplace product
+          const mapping = product.marketplaceMappings?.find(
+            (m: any) => m.marketplaceId === marketplace.id
+          );
+
+          if (mapping) {
+            await prisma.marketplaceProduct.update({
+              where: { id: mapping.id },
+              data: {
+                price: marketplacePrice,
+                updatedAt: new Date(),
+              },
+            });
+          }
+
+          succeeded++;
+        } catch (error) {
+          errors.push({
+            productId: product.id,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+
+      return {
+        marketplaceId: marketplace.id,
+        marketplaceName: marketplace.name,
+        total: products.length,
+        succeeded,
+        failed: errors.length,
+        errors,
+        duration: Date.now() - startTime,
+      };
+    } catch (error) {
+      logger.error(`Price sync failed for marketplace ${marketplace.name}:`, error);
+      return {
+        marketplaceId: marketplace.id,
+        marketplaceName: marketplace.name,
+        total: products.length,
+        succeeded,
+        failed: products.length - succeeded,
+        errors,
+        duration: Date.now() - startTime,
+      };
     }
   }
 
   /**
-   * Bulk price update with sync
+   * Calculate price for a specific marketplace
+   */
+  private static async calculateMarketplacePrice(
+    product: any,
+    marketplace: any,
+    basePrice: number
+  ): Promise<number> {
+    // Get marketplace-specific pricing strategy
+    const strategy = marketplace.priceStrategy || {};
+    
+    let finalPrice = basePrice;
+
+    // Apply price adjustments
+    if (strategy.type === 'percentage') {
+      finalPrice = basePrice * (1 + strategy.value / 100);
+    } else if (strategy.type === 'fixed') {
+      finalPrice = basePrice + strategy.value;
+    } else if (strategy.type === 'formula' && strategy.formula) {
+      // Formula-based pricing (simplified)
+      finalPrice = this.evaluateFormula(strategy.formula, basePrice);
+    }
+
+    // Apply min/max constraints
+    if (strategy.minPrice !== undefined) {
+      finalPrice = Math.max(finalPrice, strategy.minPrice);
+    }
+    if (strategy.maxPrice !== undefined) {
+      finalPrice = Math.min(finalPrice, strategy.maxPrice);
+    }
+
+    return Math.round(finalPrice * 100) / 100; // Round to 2 decimals
+  }
+
+  /**
+   * Evaluate a pricing formula
+   */
+  private static evaluateFormula(formula: string, basePrice: number): number {
+    try {
+      // Simple formula evaluation (for security, use a proper math parser in production)
+      const sanitized = formula.replace(/[^0-9+\-*/.()x ]/g, '');
+      const expression = sanitized.replace(/x/g, basePrice.toString());
+      
+      // eslint-disable-next-line no-eval
+      return eval(expression);
+    } catch (error) {
+      logger.error('Formula evaluation failed:', error);
+      return basePrice;
+    }
+  }
+
+  /**
+   * Bulk update prices with strategy
    */
   static async bulkUpdatePrices(
     tenantId: string,
-    updates: Array<{
-      productId: string;
-      price: number;
-      discountPrice?: number;
-    }>
-  ): Promise<void> {
-    logger.info('[PriceSync] Starting bulk price update', {
-      tenantId,
-      updateCount: updates.length,
-    });
+    strategy: PriceStrategy,
+    filters?: {
+      categoryId?: string;
+      brandId?: string;
+      productIds?: string[];
+    }
+  ): Promise<{ updated: number; errors: string[] }> {
+    try {
+      const where: any = { tenantId, isActive: true };
+      
+      if (filters?.categoryId) {
+        where.categoryId = filters.categoryId;
+      }
+      if (filters?.brandId) {
+        where.brandId = filters.brandId;
+      }
+      if (filters?.productIds?.length) {
+        where.id = { in: filters.productIds };
+      }
 
-    // Update prices in database
-    await prisma.$transaction(
-      updates.map(update => 
-        prisma.productPricing.upsert({
-          where: { productId: update.productId },
-          create: {
-            productId: update.productId,
-            salePrice: update.price,
-            discountPrice: update.discountPrice || null,
-            vatRate: 18,
-            currency: 'TRY',
-          },
-          update: {
-            salePrice: update.price,
-            discountPrice: update.discountPrice || null,
-          },
-        })
-      )
-    );
+      const products = await prisma.product.findMany({
+        where,
+        include: { prices: true },
+      });
 
-    // Sync to marketplaces
-    const productIds = updates.map(u => u.productId);
-    await this.syncAllMarketplaces(tenantId, productIds);
+      const errors: string[] = [];
+      let updated = 0;
 
-    logger.info('[PriceSync] Bulk price update completed', {
-      tenantId,
-      updateCount: updates.length,
-    });
+      for (const product of products) {
+        try {
+          const basePrice = product.prices?.[0]?.amount || product.price || 0;
+          const newPrice = this.applyPriceStrategy(basePrice, strategy);
+
+          await prisma.productPrice.updateMany({
+            where: { productId: product.id },
+            data: { amount: newPrice },
+          });
+
+          updated++;
+        } catch (error) {
+          errors.push(`Failed to update ${product.id}: ${error}`);
+        }
+      }
+
+      logger.info(`Bulk price update completed: ${updated} products`, {
+        tenantId,
+        strategy,
+      });
+
+      return { updated, errors };
+    } catch (error) {
+      logger.error('Bulk price update failed:', error);
+      throw error;
+    }
   }
 
   /**
-   * Get price sync history
+   * Apply price strategy to base price
    */
-  static async getPriceSyncHistory(
-    tenantId: string,
-    marketplaceId?: string,
-    page: number = 1,
-    limit: number = 20
-  ): Promise<{
-    history: Array<{
-      id: string;
-      tenantId: string;
-      marketplaceId: string;
-      marketplaceName: string;
-      totalProducts: number;
-      succeededProducts: number;
-      failedProducts: number;
-      duration: number;
-      triggeredBy: string;
-      createdAt: string;
-    }>;
-    pagination: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    };
-  }> {
-    // TODO: Implement price sync history tracking
-    // This would require a price sync history table
+  private static applyPriceStrategy(
+    basePrice: number,
+    strategy: PriceStrategy
+  ): number {
+    let newPrice = basePrice;
 
-    return {
-      history: [],
-      pagination: {
-        total: 0,
-        page,
-        limit,
-        totalPages: 0,
-      },
-    };
+    switch (strategy.type) {
+      case 'fixed':
+        newPrice = basePrice + strategy.value;
+        break;
+      case 'percentage':
+        newPrice = basePrice * (1 + strategy.value / 100);
+        break;
+      case 'formula':
+        newPrice = this.evaluateFormula(strategy.value.toString(), basePrice);
+        break;
+    }
+
+    // Apply constraints
+    if (strategy.minPrice !== undefined) {
+      newPrice = Math.max(newPrice, strategy.minPrice);
+    }
+    if (strategy.maxPrice !== undefined) {
+      newPrice = Math.min(newPrice, strategy.maxPrice);
+    }
+
+    return Math.round(newPrice * 100) / 100;
   }
 }
 
-export const priceSyncService = PriceSyncService;
+export default PriceSyncService;
