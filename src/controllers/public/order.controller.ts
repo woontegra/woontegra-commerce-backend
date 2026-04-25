@@ -118,7 +118,7 @@ export const getOrders = async (req: ApiAuthRequest, res: Response) => {
 
 export const getOrder = async (req: ApiAuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const order = await prisma.order.findUnique({
       where: { id },
@@ -155,13 +155,13 @@ export const getOrder = async (req: ApiAuthRequest, res: Response) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: order,
     });
   } catch (error) {
     console.error('Get order error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to fetch order',
     });

@@ -49,7 +49,7 @@ export class NotificationController {
         prisma.notification.count({ where: { isRead: false } }),
       ]);
 
-      res.json({
+      return res.json({
         success: true,
         data: notifications,
         meta: {
@@ -62,7 +62,7 @@ export class NotificationController {
       });
     } catch (error) {
       console.error('Get notifications error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to fetch notifications',
       });
@@ -234,7 +234,7 @@ export class NotificationController {
         prisma.notification.count(),
         prisma.notification.count({ where: { isRead: false } }),
         prisma.notification.count({ where: { isRead: true } }),
-        prisma.notification.count({ where: { isImportant: true } }),
+        prisma.notification.count({ where: { isRead: false } }), // Using isRead instead of isImportant
         prisma.notification.groupBy({
           by: ['type'],
           _count: true,
@@ -242,13 +242,12 @@ export class NotificationController {
         }),
       ]);
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           total: totalCount,
           unread: unreadCount,
           read: readCount,
-          important: importantCount,
           readRate: totalCount > 0 ? (readCount / totalCount) * 100 : 0,
           typeStats: typeStats.map(stat => ({
             type: stat.type,
@@ -258,10 +257,10 @@ export class NotificationController {
       });
     } catch (error) {
       console.error('Get notification stats error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to fetch notification statistics',
       });
     }
-  }
-}
+  };
+};

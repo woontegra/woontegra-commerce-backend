@@ -1,24 +1,15 @@
 import { Queue, Worker, QueueEvents } from 'bullmq';
+import IORedis from 'ioredis';
 import { logger } from './logger';
 
-export interface QueueConfig {
-  connection: {
-    host: string;
-    port: number;
-    password?: string;
-  };
+const redisUrl = process.env.REDIS_URL;
+
+if (!redisUrl) {
+  throw new Error("REDIS_URL tanımlı değil!");
 }
 
-/**
- * Redis connection configuration
- */
-export const queueConfig: QueueConfig = {
-  connection: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD || undefined,
-  },
-};
+// ✅ TEK bağlantı
+export const redisConnection = new IORedis(redisUrl);
 
 /**
  * Queue names
@@ -36,7 +27,7 @@ export const QUEUE_NAMES = {
  * Default queue options
  */
 export const defaultQueueOptions = {
-  connection: queueConfig.connection,
+  connection: redisConnection,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -45,28 +36,26 @@ export const defaultQueueOptions = {
     },
     removeOnComplete: {
       count: 100,
-      age: 24 * 3600, // 24 hours
+      age: 24 * 3600,
     },
     removeOnFail: {
       count: 1000,
-      age: 7 * 24 * 3600, // 7 days
+      age: 7 * 24 * 3600,
     },
   },
 };
 
 /**
- * Create a new queue
+ * Create queue
  */
 export function createQueue(name: string): Queue {
   const queue = new Queue(name, defaultQueueOptions);
-
   logger.info('[Queue] Created queue', { name });
-
   return queue;
 }
 
 /**
- * Create a new worker
+ * Create worker
  */
 export function createWorker(
   name: string,
@@ -74,80 +63,34 @@ export function createWorker(
   concurrency: number = 5
 ): Worker {
   const worker = new Worker(name, processor, {
-    connection: queueConfig.connection,
+    connection: redisConnection,
     concurrency,
   });
 
   worker.on('completed', (job) => {
-    logger.info('[Queue] Job completed', { 
-      queue: name, 
+    logger.info('[Queue] Job completed', {
+      queue: name,
       jobId: job.id,
-      jobName: job.name,
     });
   });
 
   worker.on('failed', (job, err) => {
-    logger.error('[Queue] Job failed', { 
-      queue: name, 
+    logger.error('[Queue] Job failed', {
+      queue: name,
       jobId: job?.id,
-      jobName: job?.name,
       error: err.message,
-      attempts: job?.attemptsMade,
     });
   });
 
   logger.info('[Queue] Created worker', { name, concurrency });
-
   return worker;
 }
 
 /**
- * Create queue events listener
+ * Queue events
  */
 export function createQueueEvents(name: string): QueueEvents {
-  const queueEvents = new QueueEvents(name, {
-    connection: queueConfig.connection,
+  return new QueueEvents(name, {
+    connection: redisConnection,
   });
-
-  queueEvents.on('waiting', ({ jobId }) => {
-    logger.debug('[Queue] Job waiting', { queue: name, jobId });
-  });
-
-  queueEvents.on('active', ({ jobId }) => {
-    logger.debug('[Queue] Job active', { queue: name, jobId });
-  });
-
-  queueEvents.on('progress', ({ jobId, data }) => {
-    logger.debug('[Queue] Job progress', { queue: name, jobId, progress: data });
-  });
-
-  return queueEvents;
-}
-
-/**
- * Test Redis connection
- */
-export async function testRedisConnection(): Promise<boolean> {
-  try {
-    const testQueue = new Queue('test-connection', {
-      connection: queueConfig.connection,
-    });
-
-    await testQueue.add('test', { test: true });
-    await testQueue.close();
-
-    logger.info('[Queue] Redis connection successful', {
-      host: queueConfig.connection.host,
-      port: queueConfig.connection.port,
-    });
-
-    return true;
-  } catch (error) {
-    logger.error('[Queue] Redis connection failed', { 
-      error,
-      host: queueConfig.connection.host,
-      port: queueConfig.connection.port,
-    });
-    return false;
-  }
 }

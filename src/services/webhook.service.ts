@@ -304,11 +304,11 @@ export class WebhookService {
     error?: string
   ): Promise<void> {
     try {
-      await prisma.webhookDelivery.create({
+      await prisma.webhookLog.create({
         data: {
           webhookId,
           event: payload.event,
-          payload: payload,
+          payload: payload as any,
           success,
           error,
           createdAt: new Date(),
@@ -351,7 +351,7 @@ export class WebhookService {
       }
 
       const testPayload: WebhookPayload = {
-        event: 'test',
+        event: 'order.created' as WebhookEvent, // Use a valid event for testing
         data: { message: 'This is a test webhook' },
         timestamp: new Date().toISOString(),
         tenantId: webhook.tenantId,
@@ -384,7 +384,7 @@ export class WebhookService {
     try {
       const { limit = 50, offset = 0 } = options;
 
-      const deliveries = await prisma.webhookDelivery.findMany({
+      const deliveries = await prisma.webhookLog.findMany({
         where: { webhookId },
         orderBy: { createdAt: 'desc' },
         take: limit,
