@@ -1,0 +1,7 @@
+[build]
+cmd = "npm ci && npx prisma generate && npm run build"
+
+[deploy]
+startCommand = "node dist/main.js"
+healthcheckPath = "/health"
+restartPolicyType = "always"
