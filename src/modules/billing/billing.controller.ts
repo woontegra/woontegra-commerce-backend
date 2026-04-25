@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
-import { BillingCycle, Plan } from '@prisma/client';
+import { PrismaClient, BillingCycle, Plan } from '@prisma/client';
 import { BillingService, PLAN_PRICES_TRY } from './billing.service';
 import { InvoiceService } from './invoice.service';
 import { logger } from '../../config/logger';
+
+const prisma = new PrismaClient();
 
 const billingService = new BillingService();
 const invoiceService = new InvoiceService();
@@ -84,8 +86,29 @@ export async function paymentWebhook(req: Request, res: Response): Promise<void>
 // ── GET /api/billing/subscription ───────────────────────────────────────────
 export async function getSubscription(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { tenantId } = req.user!;
+    const { tenantId, userId } = req.user!;
+    
+    // 1. Get subscription
     const subscription = await billingService.getCurrentSubscription(tenantId);
+    
+    // 2. If no subscription, get user's plan from User table
+    if (!subscription) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { plan: true, email: true }
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          plan: user?.plan || Plan.STARTER,
+          status: 'PENDING',
+          userEmail: user?.email,
+          isUserPlanFallback: true
+        },
+      });
+      return;
+    }
 
     res.json({
       success: true,
