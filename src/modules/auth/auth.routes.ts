@@ -16,6 +16,7 @@ const loginRateLimit    = createRateLimit(rateLimitConfigs.auth);
 router.post('/register',      validate(schemas.register), registerRateLimit, authController.register);
 router.post('/login',         validate(schemas.login),    loginRateLimit,    authController.login);
 router.post('/saas-register', validate(schemas.register), registerRateLimit, authController.saasRegister);
+router.get( '/me',           authenticate, authController.me);
 
 // Onboarding routes (inline — OnboardingController has no getRoutes())
 router.post('/onboarding/register-tenant', onboardingController.registerTenant);

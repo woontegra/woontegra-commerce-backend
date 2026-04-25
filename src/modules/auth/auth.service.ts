@@ -295,7 +295,7 @@ export class AuthService {
     // SUPER_ADMIN can log in with only email + password (no tenant slug needed)
     if (!data.tenantSlug) {
       const superAdmin = await prisma.user.findFirst({
-        where: { email: data.email, role: 'SUPER_ADMIN' },
+        where: { email: data.email, role: 'OWNER' },
       });
 
       if (!superAdmin) {

@@ -8,8 +8,11 @@ if (!redisUrl) {
   throw new Error("REDIS_URL tanımlı değil!");
 }
 
-// ✅ TEK bağlantı
-export const redisConnection = new IORedis(redisUrl);
+// ✅ TEK bağlantı - BullMQ requires maxRetriesPerRequest: null
+export const redisConnection = new IORedis(redisUrl, {
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+});
 
 /**
  * Queue names

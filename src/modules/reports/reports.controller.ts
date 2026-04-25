@@ -61,7 +61,7 @@ export class ReportsController {
           TO_CHAR(DATE("createdAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS date,
           COUNT(CASE WHEN status = 'success' THEN 1 END)              AS success,
           COUNT(CASE WHEN status = 'error'   THEN 1 END)              AS error
-        FROM "IntegrationLog"
+        FROM "integration_logs"
         WHERE "tenantId" = ${tenantId}
           AND "createdAt" >= NOW() - (${days} || ' days')::INTERVAL
         GROUP BY DATE("createdAt" AT TIME ZONE 'UTC')
@@ -114,9 +114,14 @@ export class ReportsController {
           })),
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       logger.error('[Reports/overview]', error);
-      return res.status(500).json({ success: false, error: 'Server error' });
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Server error',
+        message: error?.message || 'Unknown error',
+        code: error?.code || 'UNKNOWN'
+      });
     }
   }
 

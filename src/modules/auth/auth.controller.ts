@@ -93,4 +93,29 @@ export class AuthController {
       }
     }
   };
+
+  // Get current user info
+  me = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      res.status(200).json({
+        status: 'success',
+        data: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          tenantId: user.tenantId,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get user info' });
+    }
+  };
 }

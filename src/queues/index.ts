@@ -1,4 +1,3 @@
-import { testRedisConnection } from '../config/queue';
 import { emailQueue, emailWorker } from './email.queue';
 import { webhookQueue, webhookWorker } from './webhook.queue';
 import { imageProcessingQueue, imageProcessingWorker } from './image-processing.queue';
@@ -11,12 +10,8 @@ export async function initializeQueues(): Promise<void> {
   try {
     logger.info('[Queues] Initializing queues...');
 
-    // Test Redis connection
-    const isConnected = await testRedisConnection();
-    if (!isConnected) {
-      logger.error('[Queues] Redis connection failed. Queues will not work.');
-      return;
-    }
+    // Queues initialized - Redis connection handled by BullMQ
+    logger.info('[Queues] Redis connection managed by BullMQ');
 
     // Queues are already created in their respective files
     logger.info('[Queues] All queues initialized', {
