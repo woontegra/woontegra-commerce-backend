@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { jwt } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import { AppError } from './error.middleware';
 
 interface AuthGuardOptions {
@@ -7,7 +7,7 @@ interface AuthGuardOptions {
   permissions?: string[];
   requireAuth?: boolean;
   requireActiveUser?: boolean;
-  checkSubscription?: boolean;
+  checkSubscription?: boolean | string[];
   checkPlan?: string[];
 }
 
@@ -24,15 +24,16 @@ export class AuthGuard {
           throw new AppError('Authentication required', 401);
         }
         
+        let decoded: any;
         try {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+          decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
           (req as any).user = decoded;
         } catch (error) {
           throw new AppError('Invalid token', 401);
         }
         
         // Check if user is active
-        if (requireActiveUser && !(decoded as any).isActive) {
+        if (requireActiveUser && !decoded.isActive) {
           throw new AppError('Account is not active', 403);
         }
       }

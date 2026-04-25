@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppError } from '../common/middleware/error.middleware';
-import prisma from '../config/database';
+import { PrismaClient } from '@prisma/client';
+import { AppError } from './error.middleware';
+
+const prisma = new PrismaClient();
 
 interface PlanLimits {
   products: number | 'unlimited';
@@ -19,6 +21,8 @@ interface PlanFeatures {
   whiteLabel: boolean;
   api: boolean;
   mobile: boolean;
+  analytics: boolean;
+  integrations: boolean;
   support: string;
 }
 
@@ -33,21 +37,21 @@ interface CheckLimitsResult {
 
 export class PlanMiddleware {
   private static getPlanLimits(planSlug: string): PlanLimits {
-    const limits = {
+    const limits: Record<string, PlanLimits> = {
       starter: {
         products: 100,
-        variants: 2,
+        variants: 500,
         storage: 5,
-        users: 1,
+        users: 3,
         api: false,
         analytics: false,
         integrations: false
       },
       pro: {
         products: 1000,
-        variants: 10,
-        storage: 25,
-        users: 5,
+        variants: 5000,
+        storage: 50,
+        users: 10,
         api: true,
         analytics: true,
         integrations: true
@@ -55,7 +59,7 @@ export class PlanMiddleware {
       advanced: {
         products: 'unlimited',
         variants: 'unlimited',
-        storage: 100,
+        storage: 500,
         users: 20,
         api: true,
         analytics: true,
@@ -63,11 +67,11 @@ export class PlanMiddleware {
       }
     };
 
-    return limits[planSlug as keyof typeof limits] || limits.starter;
+    return limits[planSlug] || limits.starter;
   }
 
   private static getPlanFeatures(planSlug: string): PlanFeatures {
-    const features = {
+    const features: Record<string, PlanFeatures> = {
       starter: {
         basic: true,
         advanced: false,
@@ -75,6 +79,8 @@ export class PlanMiddleware {
         whiteLabel: false,
         api: false,
         mobile: false,
+        analytics: false,
+        integrations: false,
         support: 'email'
       },
       pro: {
@@ -84,6 +90,8 @@ export class PlanMiddleware {
         whiteLabel: false,
         api: true,
         mobile: true,
+        analytics: true,
+        integrations: true,
         support: 'priority'
       },
       advanced: {
@@ -93,38 +101,42 @@ export class PlanMiddleware {
         whiteLabel: true,
         api: true,
         mobile: true,
+        analytics: true,
+        integrations: true,
         support: 'dedicated'
       }
     };
 
-    return features[planSlug as keyof typeof features] || features.starter;
+    return features[planSlug] || features.starter;
   }
 
   static checkPlanLimits = async (userId: string, action: string, resource?: string): Promise<CheckLimitsResult> => {
     try {
-      // Get user with current plan
+      // Get user and active subscription
       const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          subscriptions: {
-            include: {
-              plan: true
-            }
-          }
-        }
+        where: { id: userId }
       });
 
       if (!user) {
         return { canProceed: false, reason: 'User not found' };
       }
 
-      const currentPlan = user.subscriptions[0]?.plan;
-      if (!currentPlan) {
+      // Get active subscription separately
+      const subscription = await prisma.subscription.findFirst({
+        where: {
+          userId,
+          status: 'ACTIVE'
+        }
+      });
+
+      if (!subscription) {
         return { canProceed: false, reason: 'No active subscription found' };
       }
 
-      const limits = PlanMiddleware.getPlanLimits(currentPlan.slug);
-      const features = PlanMiddleware.getPlanFeatures(currentPlan.slug);
+      const currentPlan = subscription.plan;
+
+      const limits = PlanMiddleware.getPlanLimits(currentPlan.toLowerCase());
+      const features = PlanMiddleware.getPlanFeatures(currentPlan.toLowerCase());
 
       // Get current usage
       const currentUsage = {
@@ -209,18 +221,15 @@ export class PlanMiddleware {
           return res.status(401).json({ error: 'Authentication required' });
         }
 
-        const userWithSubscription = await prisma.user.findUnique({
-          where: { id: user.id },
-          include: {
-            subscriptions: {
-              include: {
-                plan: true
-              }
-            }
+        // Get active subscription directly
+        const subscription = await prisma.subscription.findFirst({
+          where: { 
+            userId: user.id,
+            status: 'ACTIVE'
           }
         });
 
-        const currentPlan = userWithSubscription?.subscriptions[0]?.plan?.slug;
+        const currentPlan = subscription?.plan?.toLowerCase();
         
         if (!currentPlan || !requiredPlans.includes(currentPlan)) {
           return res.status(403).json({ 
@@ -238,7 +247,7 @@ export class PlanMiddleware {
           features: PlanMiddleware.getPlanFeatures(currentPlan)
         };
 
-        next();
+        return next();
       } catch (error) {
         console.error('Plan middleware error:', error);
         return res.status(500).json({ error: 'Internal server error' });
@@ -254,18 +263,15 @@ export class PlanMiddleware {
           return res.status(401).json({ error: 'Authentication required' });
         }
 
-        const userWithSubscription = await prisma.user.findUnique({
-          where: { id: user.id },
-          include: {
-            subscriptions: {
-              include: {
-                plan: true
-              }
-            }
+        // Get active subscription directly
+        const subscription = await prisma.subscription.findFirst({
+          where: { 
+            userId: user.id,
+            status: 'ACTIVE'
           }
         });
 
-        const currentPlan = userWithSubscription?.subscriptions[0]?.plan?.slug;
+        const currentPlan = subscription?.plan?.toLowerCase();
         if (!currentPlan) {
           return res.status(403).json({ error: 'No active subscription found' });
         }
@@ -284,7 +290,7 @@ export class PlanMiddleware {
           });
         }
 
-        next();
+        return next();
       } catch (error) {
         console.error('Feature access check error:', error);
         return res.status(500).json({ error: 'Internal server error' });
@@ -295,26 +301,26 @@ export class PlanMiddleware {
   static getUsageStats = async (userId: string) => {
     try {
       const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          subscriptions: {
-            include: {
-              plan: true
-            }
-          }
-        }
+        where: { id: userId }
       });
 
       if (!user) {
         throw new AppError('User not found', 404);
       }
 
-      const currentPlan = user.subscriptions[0]?.plan;
-      if (!currentPlan) {
+      // Get active subscription separately
+      const subscription = await prisma.subscription.findFirst({
+        where: { 
+          userId,
+          status: 'ACTIVE'
+        }
+      });
+
+      if (!subscription) {
         throw new AppError('No active subscription found', 404);
       }
 
-      const limits = PlanMiddleware.getPlanLimits(currentPlan.slug);
+      const limits = PlanMiddleware.getPlanLimits(subscription.plan.toLowerCase());
       
       // Get current usage
       const usage = {
@@ -333,7 +339,7 @@ export class PlanMiddleware {
       };
 
       return {
-        plan: currentPlan,
+        plan: subscription.plan,
         limits,
         usage,
         percentages: {

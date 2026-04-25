@@ -232,7 +232,7 @@ export const createOrder = async (req: ApiAuthRequest, res: Response) => {
         shippingCost: 0, // Calculate based on shipping rules
         discount: 0, // Apply discount rules
         total: subtotal,
-        status: 'pending',
+        status: 'PENDING',
         source: 'api',
         notes: validatedData.notes,
         createdAt: new Date(),
@@ -265,10 +265,10 @@ export const createOrder = async (req: ApiAuthRequest, res: Response) => {
     // Log the activity
     await prisma.activityLog.create({
       data: {
-        userId: req.apiToken?.creator.id,
-        userName: `${req.apiToken?.creator.firstName} ${req.apiToken?.creator.lastName}`,
-        userEmail: req.apiToken?.creator.email,
-        userRole: req.apiToken?.creator.role,
+        userId: req.apiToken?.tenantId || 'system',
+        userName: 'API',
+        userEmail: '',
+        userRole: 'api',
         type: 'order',
         action: 'create',
         description: `Order created via API: ${order.orderNumber}`,
@@ -276,18 +276,18 @@ export const createOrder = async (req: ApiAuthRequest, res: Response) => {
         targetId: order.id,
         targetName: order.orderNumber,
         status: 'success',
-        timestamp: new Date(),
+        tenantId: req.apiToken?.tenantId || 'system',
       },
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: order,
       message: 'Order created successfully',
     });
   } catch (error) {
     console.error('Create order error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to create order',
     });
@@ -296,7 +296,7 @@ export const createOrder = async (req: ApiAuthRequest, res: Response) => {
 
 export const updateOrder = async (req: ApiAuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const validatedData = updateOrderSchema.parse(req.body);
 
     const order = await prisma.order.findUnique({
@@ -319,7 +319,7 @@ export const updateOrder = async (req: ApiAuthRequest, res: Response) => {
     });
 
     // If order is being shipped, consume stock
-    if (validatedData.status === 'shipped' && order.status !== 'shipped') {
+    if (validatedData.status === 'SHIPPED' && order.status !== 'SHIPPED') {
       const orderItems = await prisma.orderItem.findMany({
         where: { orderId: id },
       });
@@ -342,30 +342,29 @@ export const updateOrder = async (req: ApiAuthRequest, res: Response) => {
     // Log the activity
     await prisma.activityLog.create({
       data: {
-        userId: req.apiToken?.creator.id,
-        userName: `${req.apiToken?.creator.firstName} ${req.apiToken?.creator.lastName}`,
-        userEmail: req.apiToken?.creator.email,
-        userRole: req.apiToken?.creator.role,
+        userId: req.apiToken?.tenantId || 'system',
+        userName: 'API',
+        userEmail: '',
+        userRole: 'api',
         type: 'order',
         action: 'update',
         description: `Order updated via API: ${updated.orderNumber} - Status: ${validatedData.status}`,
         targetType: 'order',
         targetId: updated.id,
         targetName: updated.orderNumber,
-        changes: validatedData,
         status: 'success',
-        timestamp: new Date(),
+        tenantId: req.apiToken?.tenantId || 'system',
       },
     });
 
-    res.json({
+    return res.json({
       success: true,
       data: updated,
       message: 'Order updated successfully',
     });
   } catch (error) {
     console.error('Update order error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update order',
     });

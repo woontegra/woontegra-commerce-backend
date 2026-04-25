@@ -317,6 +317,10 @@ export class BillingService {
               include: { users: { take: 1, where: { role: 'ADMIN' } } },
             });
 
+            // ── Get activated subscription first ───────────────────────────
+            const activatedSub = payment.subscription;
+            const adminEmail = activatedTenant.users[0]?.email || '';
+
             // ── Audit: payment success + subscription activated ────────────
             await auditService.log({
               userId: payment.userId, tenantId: payment.tenantId,
@@ -337,8 +341,6 @@ export class BillingService {
             });
 
             // ── Event: SUBSCRIPTION_ACTIVATED + PAYMENT_SUCCESS ───────────
-            const adminEmail = activatedTenant.users[0]?.email || '';
-            const activatedSub = payment.subscription;
             if (adminEmail) {
               eventBus.emit('PAYMENT_SUCCESS', {
                 tenantId:      payment.tenantId,

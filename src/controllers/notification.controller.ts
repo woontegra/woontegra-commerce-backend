@@ -4,23 +4,34 @@ import { z } from 'zod';
 
 const prisma = new PrismaClient();
 
-// Schema validation
+// Extended request type with user
+interface AuthRequest extends Request {
+  user?: {
+    id: string;
+    tenantId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: string;
+  };
+}
+
+// Schema validation - matching Prisma Notification model
 const createNotificationSchema = z.object({
   type: z.string(),
   title: z.string(),
   message: z.string(),
   data: z.any().optional(),
-  isImportant: z.boolean().default(false),
 });
 
 export class NotificationController {
   // Get all notifications for user
-  static async getNotifications(req: Request, res: Response) {
+  static async getNotifications(req: AuthRequest, res: Response) {
     try {
       const { page = 1, limit = 50, type, isRead } = req.query;
-      const userId = req.user?.id;
+      const tenantId = req.user?.tenantId;
 
-      const where: any = {};
+      const where: any = { tenantId };
 
       if (type) where.type = type;
       if (isRead !== undefined) where.isRead = isRead === 'true';
@@ -59,18 +70,21 @@ export class NotificationController {
   }
 
   // Create notification
-  static async createNotification(req: Request, res: Response) {
+  static async createNotification(req: AuthRequest, res: Response) {
     try {
       const validatedData = createNotificationSchema.parse(req.body);
       
       const notification = await prisma.notification.create({
         data: {
-          ...validatedData,
-          createdAt: new Date(),
+          type: validatedData.type,
+          title: validatedData.title,
+          message: validatedData.message,
+          data: validatedData.data,
+          tenantId: req.user!.tenantId,
         },
       });
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         data: notification,
       });
@@ -84,9 +98,9 @@ export class NotificationController {
   }
 
   // Mark notification as read
-  static async markAsRead(req: Request, res: Response) {
+  static async markAsRead(req: AuthRequest, res: Response) {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
 
       const notification = await prisma.notification.findUnique({
         where: { id },
@@ -103,40 +117,38 @@ export class NotificationController {
         where: { id },
         data: {
           isRead: true,
-          readAt: new Date(),
         },
       });
 
-      res.json({
+      return res.json({
         success: true,
         data: updated,
       });
     } catch (error) {
       console.error('Mark notification as read error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to mark notification as read',
       });
     }
-  }
+  };
 
   // Mark all notifications as read
-  static async markAllAsRead(req: Request, res: Response) {
+  static async markAllAsRead(req: AuthRequest, res: Response) {
     try {
       const { type } = req.query;
 
-      const where: any = { isRead: false };
+      const where: any = { isRead: false, tenantId: req.user?.tenantId };
       if (type) where.type = type;
 
       const result = await prisma.notification.updateMany({
         where,
         data: {
           isRead: true,
-          readAt: new Date(),
         },
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: `Marked ${result.count} notifications as read`,
         updatedCount: result.count,

@@ -16,7 +16,7 @@ export const validatePassword = (password: string): boolean => {
 };
 
 export const validateStoreName = (name: string): boolean => {
-  return name && name.trim().length >= 2 && name.trim().length <= 100;
+  return !!name && name.trim().length >= 2 && name.trim().length <= 100;
 };
 
 export const validateRequired = (value: any, fieldName: string): void => {

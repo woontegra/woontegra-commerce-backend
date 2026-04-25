@@ -28,7 +28,7 @@ export const validate = (schema: ZodSchema, source: 'body' | 'query' | 'params' 
       req.validated = req.validated || {};
       req.validated[source] = validatedData;
       
-      next();
+      return next();
     } catch (error) {
       if (error instanceof ZodError) {
         const validationErrors = error.errors.map(err => ({
@@ -45,7 +45,7 @@ export const validate = (schema: ZodSchema, source: 'body' | 'query' | 'params' 
         });
       }
       
-      next(error);
+      return next(error);
     }
   };
 };
@@ -166,7 +166,7 @@ export const validateTenantAccess = (req: Request, res: Response, next: NextFunc
     });
   }
   
-  next();
+  return next();
 };
 
 // Type extension for Request interface

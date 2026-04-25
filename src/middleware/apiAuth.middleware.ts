@@ -27,7 +27,7 @@ export const authenticateApiToken = async (
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
     // Find token in database
-    const apiToken = await prisma.aPIToken.findUnique({
+    const apiToken = await prisma.apiToken.findUnique({
       where: { token },
       include: {
         creator: {
@@ -79,7 +79,7 @@ export const authenticateApiToken = async (
     }
 
     // Update usage count
-    await prisma.aPIToken.update({
+    await prisma.apiToken.update({
       where: { id: apiToken.id },
       data: {
         currentUsage: apiToken.currentUsage + 1,
@@ -147,13 +147,13 @@ export const checkApiRateLimit = async (
     
     if (lastUsed && (now.getTime() - lastUsed.getTime()) > 60000) {
       // Reset usage if more than 1 minute has passed
-      await prisma.aPIToken.update({
+      await prisma.apiToken.update({
         where: { id: token.id },
         data: { currentUsage: 0 },
       });
       
       // Refresh token data
-      const updatedToken = await prisma.aPIToken.findUnique({
+      const updatedToken = await prisma.apiToken.findUnique({
         where: { id: token.id },
       });
       

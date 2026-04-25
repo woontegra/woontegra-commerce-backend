@@ -4,6 +4,18 @@ import { z } from 'zod';
 
 const prisma = new PrismaClient();
 
+// Extended request type with user
+interface AuthRequest extends Request {
+  user?: {
+    id: string;
+    tenantId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: string;
+  };
+}
+
 // Schema validation
 const createActivityLogSchema = z.object({
   type: z.string(),
@@ -20,7 +32,7 @@ const createActivityLogSchema = z.object({
 
 export class ActivityLogController {
   // Get all activity logs with filtering
-  static async getActivityLogs(req: Request, res: Response) {
+  static async getActivityLogs(req: AuthRequest, res: Response) {
     try {
       const {
         page = 1,
@@ -54,16 +66,7 @@ export class ActivityLogController {
           skip,
           take: Number(limit),
           orderBy: { timestamp: 'desc' },
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
+          // Note: user relation is not defined in ActivityLog model
         }),
         prisma.activityLog.count({ where }),
       ]);
@@ -88,7 +91,7 @@ export class ActivityLogController {
   }
 
   // Create activity log
-  static async createActivityLog(req: Request, res: Response) {
+  static async createActivityLog(req: AuthRequest, res: Response) {
     try {
       const validatedData = createActivityLogSchema.parse(req.body);
       
@@ -99,7 +102,7 @@ export class ActivityLogController {
           userName: req.user?.firstName + ' ' + req.user?.lastName,
           userEmail: req.user?.email,
           userRole: req.user?.role,
-          timestamp: new Date(),
+          tenantId: (req as any).user?.tenantId || 'system',
         },
       });
 
@@ -117,15 +120,15 @@ export class ActivityLogController {
   }
 
   // Get activity log statistics
-  static async getLogStats(req: Request, res: Response) {
+  static async getLogStats(req: AuthRequest, res: Response) {
     try {
       const { startDate, endDate } = req.query;
       
       const where: any = {};
       if (startDate || endDate) {
         where.timestamp = {};
-        if (startDate) where.timestamp.gte = new Date(startDate as string);
-        if (endDate) where.timestamp.lte = new Date(endDate as string);
+        if (startDate) where.timestamp.gte = new Date(Array.isArray(startDate) ? startDate[0] as string : startDate as string);
+        if (endDate) where.timestamp.lte = new Date(Array.isArray(endDate) ? endDate[0] as string : endDate as string);
       }
 
       const [
@@ -191,9 +194,9 @@ export class ActivityLogController {
   }
 
   // Delete activity log (admin only)
-  static async deleteActivityLog(req: Request, res: Response) {
+  static async deleteActivityLog(req: AuthRequest, res: Response) {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
 
       const log = await prisma.activityLog.findUnique({
         where: { id },
@@ -210,13 +213,13 @@ export class ActivityLogController {
         where: { id },
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Activity log deleted successfully',
       });
     } catch (error) {
       console.error('Delete activity log error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to delete activity log',
       });
@@ -224,7 +227,7 @@ export class ActivityLogController {
   }
 
   // Bulk delete activity logs (admin only)
-  static async bulkDeleteActivityLogs(req: Request, res: Response) {
+  static async bulkDeleteActivityLogs(req: AuthRequest, res: Response) {
     try {
       const { ids, olderThan } = req.body;
 
@@ -233,7 +236,7 @@ export class ActivityLogController {
       if (ids && Array.isArray(ids)) {
         where.id = { in: ids };
       } else if (olderThan) {
-        where.timestamp = { lt: new Date(olderThan) };
+        where.timestamp = { lt: new Date(olderThan as string) };
       } else {
         return res.status(400).json({
           success: false,
@@ -243,17 +246,17 @@ export class ActivityLogController {
 
       const result = await prisma.activityLog.deleteMany({ where });
 
-      res.json({
+      return res.json({
         success: true,
         message: `Deleted ${result.count} activity logs`,
         deletedCount: result.count,
       });
     } catch (error) {
       console.error('Bulk delete activity logs error:', error);
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: 'Failed to delete activity logs',
       });
     }
-  }
-}
+  };
+};

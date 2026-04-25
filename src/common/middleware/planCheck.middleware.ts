@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PlanMiddleware } from '../common/middleware/plan.middleware';
+import { PlanMiddleware } from './plan.middleware';
 
 export const checkPlanLimits = async (req: Request, res: Response, next: Function) => {
   try {
@@ -20,7 +20,7 @@ export const checkPlanLimits = async (req: Request, res: Response, next: Functio
       });
     }
 
-    next();
+    return next();
   } catch (error) {
     console.error('Plan limits middleware error:', error);
     return res.status(500).json({ error: 'Internal server error' });

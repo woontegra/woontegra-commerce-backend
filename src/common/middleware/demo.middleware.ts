@@ -74,7 +74,7 @@ export class DemoMiddleware {
       });
 
       (req as any).demoSession = newSession;
-      next();
+      return next();
     } catch (error) {
       console.error('Demo session creation failed:', error);
       next(new AppError('Demo session creation failed', 500));
@@ -104,7 +104,7 @@ export class DemoMiddleware {
       });
     }
 
-    next();
+    return next();
   };
 
   static checkDemoRestrictions = (action: string) => {
@@ -205,7 +205,7 @@ export class DemoMiddleware {
       res.setHeader('X-Demo-Time-Remaining', timeRemaining);
       res.setHeader('X-Demo-Session-ID', session.id);
 
-      next();
+      return next();
     };
   };
 
@@ -233,7 +233,7 @@ export class DemoMiddleware {
     }
 
     demoSessions.set(session.id, session);
-    next();
+    return next();
   };
 
   static getDemoSessionInfo = (req: Request, res: Response) => {
@@ -250,7 +250,7 @@ export class DemoMiddleware {
     const timeRemainingMinutes = Math.floor(timeRemaining / (1000 * 60));
     const timeRemainingSeconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
 
-    res.json({
+    return res.json({
       hasDemoSession: true,
       sessionId: session.id,
       startTime: session.startTime,

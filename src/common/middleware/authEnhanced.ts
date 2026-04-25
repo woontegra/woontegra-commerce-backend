@@ -146,7 +146,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: Response, nex
       timestamp: new Date().toISOString(),
     });
 
-    next();
+    return next();
   } catch (error) {
     if (error instanceof AppError) {
       // Log authentication failure
@@ -212,7 +212,7 @@ export const requireRole = (requiredRoles: string | string[]) => {
       });
     }
 
-    next();
+    return next();
   };
 };
 
@@ -253,7 +253,7 @@ export const requireTenantAccess = async (req: AuthenticatedRequest, res: Respon
     });
   }
 
-  next();
+  return next();
 };
 
 // Optional authentication (doesn't fail if no token)

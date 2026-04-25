@@ -73,7 +73,7 @@ export class PlanController {
       }
 
       // Check if user already has active subscription
-      const existingSubscription = await prisma.userSubscription.findFirst({
+      const existingSubscription = await prisma.subscription.findFirst({
         where: {
           userId,
           status: 'active',
@@ -86,7 +86,7 @@ export class PlanController {
       }
 
       // Create subscription
-      const subscription = await prisma.userSubscription.create({
+      const subscription = await prisma.subscription.create({
         data: {
           userId,
           tenantId,
@@ -121,7 +121,7 @@ export class PlanController {
       const { tenantId } = (req as any).user.tenantId;
       const { userId } = (req as any).user.id;
 
-      const subscription = await prisma.userSubscription.findFirst({
+      const subscription = await prisma.subscription.findFirst({
         where: {
           userId,
           tenantId,
@@ -156,7 +156,7 @@ export class PlanController {
       const { tenantId } = (req as any).user.tenantId;
       const { userId } = (req as any).user.id;
 
-      const subscription = await prisma.userSubscription.findFirst({
+      const subscription = await prisma.subscription.findFirst({
         where: {
           userId,
           tenantId,
@@ -168,7 +168,7 @@ export class PlanController {
         throw new AppError('No active subscription found', 404);
       }
 
-      await prisma.userSubscription.update({
+      await prisma.subscription.update({
         where: { id: subscription.id },
         data: {
           status: 'cancelled',
@@ -196,7 +196,7 @@ export class PlanController {
       const { userId } = (req as any).user.id;
 
       // Get current subscription
-      const currentSubscription = await prisma.userSubscription.findFirst({
+      const currentSubscription = await prisma.subscription.findFirst({
         where: {
           userId,
           tenantId,
@@ -218,7 +218,7 @@ export class PlanController {
       }
 
       // Cancel current subscription
-      await prisma.userSubscription.update({
+      await prisma.subscription.update({
         where: { id: currentSubscription.id },
         data: {
           status: 'cancelled',
@@ -227,7 +227,7 @@ export class PlanController {
       });
 
       // Create new subscription
-      const newSubscription = await prisma.userSubscription.create({
+      const newSubscription = await prisma.subscription.create({
         data: {
           userId,
           tenantId,

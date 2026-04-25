@@ -71,5 +71,5 @@ export const requestSizeLimiter = (req: Request, res: Response, next: NextFuncti
     });
   }
 
-  next();
+  return next();
 };

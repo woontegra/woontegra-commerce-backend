@@ -1,4 +1,4 @@
-import { PrismaClient, PaymentStatus, PaymentMethod, SubscriptionPlan } from '@prisma/client';
+import { PrismaClient, PaymentStatus, BillingCycle, Plan, SubscriptionStatus } from '@prisma/client';
 import { AppError } from '../../common/middleware/error.middleware';
 import Stripe from 'stripe';
 import { logger } from '../../config/logger';
@@ -9,18 +9,24 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2024-06-20' as any,
 });
 
+// PaymentMethod as string type since it's not defined as enum in schema
+type PaymentMethodType = 'credit_card' | 'bank_transfer' | 'paypal' | 'iyzico';
+
 interface PaymentRequest {
+  tenantId: string;
   amount: number;
   currency: string;
-  paymentMethod: PaymentMethod;
+  paymentMethod: PaymentMethodType;
   description?: string;
   metadata?: Record<string, any>;
 }
 
 interface SubscriptionRequest {
-  planId: string;
+  tenantId: string;
+  userId: string;
+  plan: Plan;
   paymentData: PaymentRequest;
-  billingCycle: 'monthly' | 'yearly';
+  billingCycle: BillingCycle;
 }
 
 export class PaymentService {
@@ -39,6 +45,9 @@ export class PaymentService {
         case 'paypal':
           paymentResult = await this.processPayPalPayment(data);
           break;
+        case 'iyzico':
+          paymentResult = await this.processIyzicoPayment(data);
+          break;
         default:
           throw new AppError('Unsupported payment method', 400);
       }
@@ -46,7 +55,8 @@ export class PaymentService {
       // Save payment record
       const payment = await prisma.payment.create({
         data: {
-          userId,
+          tenantId: data.tenantId,
+          subscriptionId: '', // Will be updated after subscription creation
           amount: data.amount,
           currency: data.currency,
           status: paymentResult.status as PaymentStatus,
@@ -82,7 +92,7 @@ export class PaymentService {
       });
 
       return {
-        status: 'pending',
+        status: 'pending' as PaymentStatus,
         externalId: paymentIntent.id,
         clientSecret: paymentIntent.client_secret,
       };
@@ -94,11 +104,10 @@ export class PaymentService {
 
   // Process bank transfer
   private static async processBankTransfer(data: PaymentRequest) {
-    // Bank transfer logic - generate reference number
     const referenceNumber = `TRF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
     return {
-      status: 'pending',
+      status: 'pending' as PaymentStatus,
       externalId: referenceNumber,
       instructions: `Please transfer ${data.amount} ${data.currency} to our bank account with reference: ${referenceNumber}`,
     };
@@ -106,40 +115,42 @@ export class PaymentService {
 
   // Process PayPal payment
   private static async processPayPalPayment(data: PaymentRequest) {
-    // PayPal integration placeholder
     const paypalOrderId = `PAYPAL-${Date.now()}`;
 
     return {
-      status: 'pending',
+      status: 'pending' as PaymentStatus,
       externalId: paypalOrderId,
       redirectUrl: `https://www.paypal.com/checkout?token=${paypalOrderId}`,
     };
   }
 
+  // Process Iyzico payment
+  private static async processIyzicoPayment(data: PaymentRequest) {
+    const iyzicoTransactionId = `IYZICO-${Date.now()}`;
+
+    return {
+      status: 'pending' as PaymentStatus,
+      externalId: iyzicoTransactionId,
+    };
+  }
+
   // Create subscription
-  static async createSubscription(userId: string, data: SubscriptionRequest) {
+  static async createSubscription(data: SubscriptionRequest) {
     try {
-      const plan = await prisma.subscriptionPlan.findUnique({
-        where: { id: data.planId },
-      });
+      const { tenantId, userId, plan, paymentData, billingCycle } = data;
 
-      if (!plan) {
-        throw new AppError('Subscription plan not found', 404);
-      }
-
-      // Calculate price based on billing cycle
-      const price = data.billingCycle === 'yearly'
-        ? (plan.yearlyPrice || plan.monthlyPrice * 10)
-        : plan.monthlyPrice;
+      // Calculate price based on plan and billing cycle
+      const planPricing = this.getPlanPricing(plan, billingCycle);
 
       // Process initial payment
       const paymentResult = await this.processPayment(userId, {
-        ...data.paymentData,
-        amount: price,
-        description: `Subscription: ${plan.name} (${data.billingCycle})`,
+        ...paymentData,
+        tenantId,
+        amount: planPricing,
+        description: `Subscription: ${plan} (${billingCycle})`,
         metadata: {
-          planId: plan.id,
-          billingCycle: data.billingCycle,
+          plan,
+          billingCycle,
           type: 'subscription',
         },
       });
@@ -151,20 +162,22 @@ export class PaymentService {
       // Create subscription
       const now = new Date();
       const endDate = new Date(now);
-      if (data.billingCycle === 'yearly') {
+      if (billingCycle === 'YEARLY') {
         endDate.setFullYear(endDate.getFullYear() + 1);
       } else {
         endDate.setMonth(endDate.getMonth() + 1);
       }
 
-      const subscription = await prisma.userSubscription.create({
+      // Update payment with proper subscription ID (will be created first)
+      const subscription = await prisma.subscription.create({
         data: {
+          tenantId,
           userId,
-          planId: plan.id,
-          status: 'active',
-          billingCycle: data.billingCycle,
-          price,
-          currency: plan.currency,
+          plan,
+          status: 'active' as SubscriptionStatus,
+          billingCycle,
+          price: planPricing,
+          currency: paymentData.currency,
           startDate: now,
           endDate,
           paymentId: paymentResult.payment.id,
@@ -172,7 +185,13 @@ export class PaymentService {
         },
       });
 
-      logger.info(`Subscription created: ${subscription.id}`, { userId, planId: plan.id });
+      // Update payment with subscription ID
+      await prisma.payment.update({
+        where: { id: paymentResult.payment.id },
+        data: { subscriptionId: subscription.id },
+      });
+
+      logger.info(`Subscription created: ${subscription.id}`, { userId, plan, tenantId });
 
       return {
         success: true,
@@ -188,7 +207,7 @@ export class PaymentService {
   // Cancel subscription
   static async cancelSubscription(userId: string, subscriptionId: string) {
     try {
-      const subscription = await prisma.userSubscription.findFirst({
+      const subscription = await prisma.subscription.findFirst({
         where: { id: subscriptionId, userId },
       });
 
@@ -200,10 +219,10 @@ export class PaymentService {
         throw new AppError('Subscription is not active', 400);
       }
 
-      const updatedSubscription = await prisma.userSubscription.update({
+      const updatedSubscription = await prisma.subscription.update({
         where: { id: subscriptionId },
         data: {
-          status: 'cancelled',
+          status: 'cancelled' as SubscriptionStatus,
           cancelledAt: new Date(),
         },
       });
@@ -225,14 +244,27 @@ export class PaymentService {
     try {
       const { limit = 10, offset = 0 } = options;
 
+      // Get user to find tenant
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { tenantId: true },
+      });
+
+      if (!user) {
+        throw new AppError('User not found', 404);
+      }
+
       const [payments, total] = await Promise.all([
         prisma.payment.findMany({
-          where: { userId },
+          where: { tenantId: user.tenantId },
           orderBy: { createdAt: 'desc' },
           take: limit,
           skip: offset,
+          include: {
+            subscription: true,
+          },
         }),
-        prisma.payment.count({ where: { userId } }),
+        prisma.payment.count({ where: { tenantId: user.tenantId } }),
       ]);
 
       return {
@@ -251,33 +283,36 @@ export class PaymentService {
   // Get billing history
   static async getBillingHistory(userId: string) {
     try {
-      const billingCycles = await prisma.billingCycle.findMany({
+      // Get user to find tenant
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { tenantId: true },
+      });
+
+      if (!user) {
+        throw new AppError('User not found', 404);
+      }
+
+      const subscriptions = await prisma.subscription.findMany({
         where: {
-          userSubscription: {
-            userId,
-          },
+          userId,
         },
         include: {
-          userSubscription: {
-            include: { plan: true },
-          },
-          paymentMethod: true,
+          payments: true,
         },
         orderBy: { createdAt: 'desc' },
       });
 
       const invoices = await prisma.invoice.findMany({
         where: {
-          userSubscription: {
-            userId,
-          },
+          tenantId: user.tenantId,
         },
         orderBy: { createdAt: 'desc' },
       });
 
       return {
         success: true,
-        billingCycles,
+        subscriptions,
         invoices,
       };
     } catch (error) {
@@ -287,47 +322,50 @@ export class PaymentService {
   }
 
   // Upgrade plan
-  static async upgradePlan(userId: string, planId: string, paymentData: PaymentRequest) {
+  static async upgradePlan(userId: string, newPlan: Plan, paymentData: PaymentRequest) {
     try {
-      const targetPlan = await prisma.subscriptionPlan.findUnique({
-        where: { id: planId },
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { tenantId: true },
       });
 
-      if (!targetPlan) {
-        throw new AppError('Target plan not found', 404);
+      if (!user) {
+        throw new AppError('User not found', 404);
       }
 
-      const currentSubscription = await prisma.userSubscription.findFirst({
+      const currentSubscription = await prisma.subscription.findFirst({
         where: {
           userId,
           status: 'active',
         },
-        include: { plan: true },
       });
 
       if (!currentSubscription) {
         throw new AppError('No active subscription found', 400);
       }
 
+      // Calculate new price
+      const newPlanPrice = this.getPlanPricing(newPlan, currentSubscription.billingCycle);
+
       // Calculate prorated amount
       const now = new Date();
       const daysRemaining = Math.max(0, Math.ceil((currentSubscription.endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-      const totalDays = currentSubscription.billingCycle === 'yearly' ? 365 : 30;
+      const totalDays = currentSubscription.billingCycle === 'YEARLY' ? 365 : 30;
       const dailyRate = currentSubscription.price / totalDays;
       const remainingValue = dailyRate * daysRemaining;
 
-      const newPlanPrice = paymentData.amount;
       const upgradeCost = Math.max(0, newPlanPrice - remainingValue);
 
       // Process upgrade payment
       const paymentResult = await this.processPayment(userId, {
         ...paymentData,
+        tenantId: user.tenantId,
         amount: upgradeCost,
-        description: `Plan upgrade: ${currentSubscription.plan.name} → ${targetPlan.name}`,
+        description: `Plan upgrade: ${currentSubscription.plan} → ${newPlan}`,
         metadata: {
           type: 'upgrade',
-          fromPlanId: currentSubscription.planId,
-          toPlanId: targetPlan.id,
+          fromPlan: currentSubscription.plan,
+          toPlan: newPlan,
           proratedCredit: remainingValue,
         },
       });
@@ -337,30 +375,31 @@ export class PaymentService {
       }
 
       // Cancel current subscription
-      await prisma.userSubscription.update({
+      await prisma.subscription.update({
         where: { id: currentSubscription.id },
         data: {
-          status: 'upgraded',
-          endDate: now,
+          status: 'cancelled' as SubscriptionStatus,
+          cancelledAt: now,
         },
       });
 
       // Create new subscription
       const endDate = new Date(now);
-      if (currentSubscription.billingCycle === 'yearly') {
+      if (currentSubscription.billingCycle === 'YEARLY') {
         endDate.setFullYear(endDate.getFullYear() + 1);
       } else {
         endDate.setMonth(endDate.getMonth() + 1);
       }
 
-      const newSubscription = await prisma.userSubscription.create({
+      const newSubscription = await prisma.subscription.create({
         data: {
+          tenantId: user.tenantId,
           userId,
-          planId: targetPlan.id,
-          status: 'active',
+          plan: newPlan,
+          status: 'active' as SubscriptionStatus,
           billingCycle: currentSubscription.billingCycle,
           price: newPlanPrice,
-          currency: targetPlan.currency,
+          currency: currentSubscription.currency,
           startDate: now,
           endDate,
           paymentId: paymentResult.payment.id,
@@ -368,7 +407,13 @@ export class PaymentService {
         },
       });
 
-      logger.info(`Plan upgraded: ${userId} → ${targetPlan.name}`, { userId, planId });
+      // Update payment with subscription ID
+      await prisma.payment.update({
+        where: { id: paymentResult.payment.id },
+        data: { subscriptionId: newSubscription.id },
+      });
+
+      logger.info(`Plan upgraded: ${userId} → ${newPlan}`, { userId, newPlan, tenantId: user.tenantId });
 
       return {
         success: true,
@@ -380,6 +425,17 @@ export class PaymentService {
       logger.error('Plan upgrade failed:', error);
       throw error;
     }
+  }
+
+  // Helper to get plan pricing
+  private static getPlanPricing(plan: Plan, billingCycle: BillingCycle): number {
+    const prices: Record<Plan, { monthly: number; yearly: number }> = {
+      STARTER: { monthly: 99, yearly: 990 },
+      PRO: { monthly: 299, yearly: 2990 },
+      ENTERPRISE: { monthly: 999, yearly: 9990 },
+    };
+
+    return billingCycle === 'YEARLY' ? prices[plan].yearly : prices[plan].monthly;
   }
 
   // Webhook handler for Stripe
@@ -417,19 +473,18 @@ export class PaymentService {
   private static async handlePaymentSuccess(paymentIntent: any) {
     await prisma.payment.updateMany({
       where: { externalId: paymentIntent.id },
-      data: { status: 'completed' },
+      data: { status: 'completed' as PaymentStatus },
     });
   }
 
   private static async handlePaymentFailure(paymentIntent: any) {
     await prisma.payment.updateMany({
       where: { externalId: paymentIntent.id },
-      data: { status: 'failed' },
+      data: { status: 'failed' as PaymentStatus },
     });
   }
 
   private static async handleInvoicePaymentSuccess(invoice: any) {
-    // Handle subscription invoice payment
     logger.info(`Invoice payment succeeded: ${invoice.id}`);
   }
 }

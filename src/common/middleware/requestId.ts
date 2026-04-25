@@ -22,14 +22,14 @@ export const requestLoggerMiddleware = (req: Request, res: Response, next: NextF
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Request started`);
   
   // Override res.end to log response time
-  const originalEnd = res.end;
-  res.end = function(chunk?: any, encoding?: any) {
+  const originalEnd = res.end.bind(res);
+  res.end = function(chunk?: any, encoding?: any): any {
     const responseTime = Date.now() - startTime;
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - ${res.statusCode} (${responseTime}ms)`);
     
     // Call original end
-    originalEnd.call(this, chunk, encoding);
+    return originalEnd(chunk, encoding);
   };
   
-  next();
+  return next();
 };

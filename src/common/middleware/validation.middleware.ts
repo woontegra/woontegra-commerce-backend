@@ -21,7 +21,7 @@ export const validate = (schema: Joi.ObjectSchema) => {
     }
 
     req.body = value;
-    next();
+    return next();
   };
 };
 
@@ -155,13 +155,6 @@ export const schemas = {
     city: Joi.string().max(100).allow('', null),
     country: Joi.string().max(100).allow('', null),
     zipCode: Joi.string().max(20).allow('', null),
-  }),
-
-  // Tenant schema
-  createTenant: Joi.object({
-    name: Joi.string().min(2).max(100).required(),
-    slug: Joi.string().min(2).max(50).required(),
-    domain: Joi.string().optional(),
   }),
 
   // Order schema

@@ -51,7 +51,7 @@ export function requireRole(...allowedRoles: UserRole[]) {
       });
     }
 
-    next();
+    return next();
   };
 }
 
@@ -118,7 +118,7 @@ export type Permission = keyof typeof PERMISSIONS;
  */
 export function hasPermission(userRole: UserRole, permission: Permission): boolean {
   const allowedRoles = PERMISSIONS[permission];
-  return allowedRoles.includes(userRole);
+  return allowedRoles.includes(userRole as any);
 }
 
 /**
@@ -142,6 +142,6 @@ export function requirePermission(permission: Permission) {
       });
     }
 
-    next();
+    return next();
   };
 }
