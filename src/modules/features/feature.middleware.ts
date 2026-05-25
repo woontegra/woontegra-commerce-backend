@@ -17,8 +17,8 @@ interface AuthRequest extends Request {
  */
 export function checkFeature(featureKey: FeatureKey) {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
-    // SUPER_ADMIN always bypasses feature flags
-    if (req.user?.role === 'SUPER_ADMIN') return next();
+    // SUPER_ADMIN and OWNER always bypass feature flags
+    if (req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'OWNER') return next();
 
     const tenantId = req.user?.tenantId;
     if (!tenantId) {
@@ -66,7 +66,7 @@ export function checkFeature(featureKey: FeatureKey) {
  */
 export function checkPlanFeature(featureKey: FeatureKey) {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (req.user?.role === 'SUPER_ADMIN') return next();
+    if (req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'OWNER') return next();
 
     const tenantId = req.user?.tenantId;
     if (!tenantId) {
@@ -118,7 +118,7 @@ export const attachFeatureFlags = async (
   next: NextFunction,
 ) => {
   const tenantId = req.user?.tenantId;
-  if (!tenantId || req.user?.role === 'SUPER_ADMIN') {
+  if (!tenantId || req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'OWNER') {
     (req as any).features = {};
     return next();
   }

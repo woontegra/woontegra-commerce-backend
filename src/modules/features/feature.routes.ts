@@ -18,9 +18,10 @@ router.get('/', authenticate, async (req: AuthReq, res: Response) => {
     const tenantId = req.user?.tenantId;
     if (!tenantId) return res.status(401).json({ success: false });
 
+    const userId = req.user?.userId;
     const [flags, plan] = await Promise.all([
       featureService.getTenantFlags(tenantId),
-      featureService.getTenantPlan(tenantId),
+      featureService.getTenantPlan(tenantId, userId),
     ]);
 
     const planFeatureKeys = featureService.getPlanFeatureKeys(plan);

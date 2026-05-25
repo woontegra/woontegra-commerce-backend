@@ -18,5 +18,23 @@ router.post('/register-user', registerUserRateLimit, onboardingController.regist
 router.get('/status', requireAuth(), onboardingController.getOnboardingStatus);
 router.post('/next', requireAuth(), onboardingController.updateOnboardingStep);
 router.post('/complete', requireAuth(), onboardingController.completeOnboarding);
+router.post('/dismiss', requireAuth(), onboardingController.dismissOnboarding);
+router.post('/reopen', requireAuth(), onboardingController.reopenOnboarding);
+
+// ─── NEW ONBOARDING WIZARD ROUTES ───────────────────────────────────────────
+// GET /api/onboarding/wizard/status - Get current wizard status
+router.get('/wizard/status', requireAuth(), onboardingController.getOnboardingWizardStatus);
+
+// POST /api/onboarding/theme - STEP 1: Save theme selection
+router.post('/theme', requireAuth(), onboardingController.saveTheme);
+
+// POST /api/onboarding/store-info - STEP 2: Save store info
+router.post('/store-info', requireAuth(), onboardingController.saveStoreInfo);
+
+// POST /api/onboarding/product - STEP 3: Create first product
+router.post('/product', requireAuth(), onboardingController.createFirstProduct);
+
+// POST /api/onboarding/complete-wizard - STEP 4: Complete onboarding
+router.post('/complete-wizard', requireAuth(), onboardingController.completeOnboardingWizard);
 
 export default router;

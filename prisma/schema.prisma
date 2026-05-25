@@ -11,6 +11,12 @@ model Tenant {
   id                   String                @id @default(uuid())
   name                 String
   slug                 String                @unique
+  description          String?
+  logoUrl              String?
+  themePreset          String                @default("modern")
+  /// Storefront tema paketi (örn. default)
+  theme                String                @default("default")
+  themeConfig          Json?
   isActive             Boolean               @default(true)
   status               TenantStatus          @default(TRIAL)
   trialEndsAt          DateTime?
@@ -31,8 +37,14 @@ model Tenant {
   coupons              Coupon[]
   customerGroups       CustomerGroup[]
   customers            Customer[]
+  customerAddresses    CustomerAddress[]
+  customerFavorites           CustomerFavorite[]
+  customerPasswordResetTokens CustomerPasswordResetToken[]
+  orderReturnRequests         OrderReturnRequest[]
+  returnRefundRecords           ReturnRefundRecord[]
   discountRules        DiscountRule[]
   importLogs           ImportLog[]
+  xmlSources           XmlSource[]
   logs                 Log[]
   notifications        Notification[]
   orders               Order[]
@@ -69,32 +81,85 @@ model Tenant {
   stores                 Store[]
   exchangeRates          ExchangeRate[]
   apiKeys                ApiKey[]
+  leads                  Lead[]
+  legalAcceptances       LegalAcceptance[]
+  usageLogs              TenantUsageLog[]
+  tenantDomains          TenantDomain[]
+  pricingRules           PricingRule[]
+  pricingSettings        PricingSettings?
+  platformLogEntries     PlatformLogEntry[]
+  storePaymentSessions   StorePaymentSession[]
+  paymentSettings        TenantPaymentSetting[]
+  shippingSetting        TenantShippingSetting?
 
   @@map("tenants")
 }
 
+/// Mağaza hostname eşlemesi (subdomain + özel domain); çözümleme ve DNS doğrulama için.
+model TenantDomain {
+  id         String           @id @default(uuid())
+  tenantId   String
+  domain     String           @unique // küçük harf: custom FQDN veya subdomain etiketi
+  type       TenantDomainType
+  isVerified Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@map("tenant_domains")
+}
+
+enum TenantDomainType {
+  subdomain
+  custom
+}
+
+/// Tenant bazlı hafif kullanım olayları (admin özet / raporlama).
+model TenantUsageLog {
+  id        String            @id @default(uuid())
+  tenantId  String
+  action    TenantUsageAction
+  createdAt DateTime          @default(now())
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, action])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("tenant_usage_logs")
+}
+
+enum TenantUsageAction {
+  LOGIN
+  PRODUCT_CREATE
+  ORDER_CREATE
+}
+
 model User {
-  id              String           @id @default(uuid())
-  email           String
-  password        String
-  firstName       String
-  lastName        String
-  role            UserRole         @default(USER)
-  isActive        Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  tenantId        String
-  plan            Plan             @default(STARTER)
-  AbandonedCart   AbandonedCart[]
-  B2BProfile      B2BProfile?
-  Cart            Cart[]
-  ImportLog       ImportLog[]
-  Post            Post[]
-  Wishlist        Wishlist?
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  subscriptions   Subscription[]
-  payments        Payment[]
-  userPermissions UserPermission[]
+  id                  String           @id @default(uuid())
+  email               String
+  password            String
+  firstName           String
+  lastName            String
+  role                UserRole         @default(USER)
+  isActive            Boolean          @default(true)
+  onboardingCompleted Boolean          @default(false)
+  onboardingStep      Int              @default(0)
+  lastLoginAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  tenantId            String
+  plan                Plan             @default(STARTER)
+  AbandonedCart       AbandonedCart[]
+  B2BProfile          B2BProfile?
+  Cart                Cart[]
+  ImportLog           ImportLog[]
+  Post                Post[]
+  Wishlist            Wishlist?
+  tenant              Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptions       Subscription[]
+  payments            Payment[]
+  userPermissions     UserPermission[]
+  legalAcceptances    LegalAcceptance[]
 
   @@unique([email, tenantId])
   @@map("users")
@@ -132,25 +197,84 @@ model CustomerGroup {
 }
 
 model Customer {
-  id        String   @id @default(uuid())
-  email     String
-  firstName String
-  lastName  String
-  phone     String?
-  address   String?
-  city      String?
-  country   String?
-  zipCode   String?
-  groupId   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  group     CustomerGroup? @relation(fields: [groupId], references: [id])
-  orders    Order[]
+  id           String   @id @default(uuid())
+  email        String
+  firstName    String
+  lastName     String
+  phone        String?
+  address      String?
+  city         String?
+  country      String?
+  zipCode      String?
+  passwordHash String?
+  groupId      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenantId     String
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  group        CustomerGroup?    @relation(fields: [groupId], references: [id])
+  orders       Order[]
+  addresses    CustomerAddress[]
+  favorites            CustomerFavorite[]
+  returnRequests         OrderReturnRequest[]
+  refundRecords          ReturnRefundRecord[]
+  passwordResetTokens    CustomerPasswordResetToken[]
 
   @@unique([email, tenantId])
   @@map("customers")
+}
+
+/// Vitrin müşteri şifre sıfırlama — token hash saklanır, düz metin değil.
+model CustomerPasswordResetToken {
+  id         String    @id @default(uuid())
+  tenantId   String
+  customerId String
+  tokenHash  String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, customerId])
+  @@index([tokenHash])
+  @@map("customer_password_reset_tokens")
+}
+
+model CustomerFavorite {
+  id         String   @id @default(uuid())
+  tenantId   String
+  customerId String
+  productId  String
+  createdAt  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+  @@index([tenantId, customerId])
+  @@map("customer_favorites")
+}
+
+model CustomerAddress {
+  id          String   @id @default(uuid())
+  tenantId    String
+  customerId  String
+  title       String   @default("Adres")
+  fullName    String
+  phone       String
+  city        String
+  district    String
+  addressLine String
+  postalCode  String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, customerId])
+  @@map("customer_addresses")
 }
 
 model Category {
@@ -178,6 +302,7 @@ model Category {
   children        Category[] @relation("CategoryHierarchy")
   tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   products        Product[]
+  pricingRules    PricingRule[]
   categoryAttributes CategoryAttribute[]
 
   @@unique([slug, tenantId])
@@ -295,6 +420,7 @@ model Product {
   productStats      ProductStats?
   variants          ProductVariant[]
   wishlistItems     WishlistItem[]
+  customerFavorites CustomerFavorite[]
   category          Category?          @relation(fields: [categoryId], references: [id])
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   store             Store?             @relation(fields: [storeId], references: [id], onDelete: SetNull)
@@ -419,6 +545,16 @@ model ProductImage {
   @@map("product_images")
 }
 
+/// Sipariş ödeme durumu (OrderStatus operasyonel durumdan ayrı).
+enum OrderPaymentStatus {
+  PENDING
+  WAITING_BANK_TRANSFER
+  PAID
+  APPROVED
+  FAILED
+  CANCELLED
+}
+
 model Order {
   id               String          @id @default(uuid())
   orderNumber      String          @unique
@@ -426,6 +562,21 @@ model Order {
   totalAmount      Decimal         @db.Decimal(10, 2)
   currency         String          @default("TRY")
   notes            String?
+  paymentProvider  PaymentProviderType?
+  paymentStatus    OrderPaymentStatus?  @default(PENDING)
+  paymentApprovedAt DateTime?
+  paymentFailedAt   DateTime?
+  bankTransferPendingEmailSentAt  DateTime?
+  bankTransferPendingEmailLastResentAt DateTime?
+  bankTransferApprovedEmailSentAt   DateTime?
+  paymentReceivedEmailSentAt      DateTime?
+  paymentFailedEmailSentAt        DateTime?
+  shippingCarrier                 String?
+  shippingTrackingNumber          String?
+  shippingTrackingUrl             String?
+  shippedAt                       DateTime?
+  shippingNotificationSentAt      DateTime?
+  cashOnDeliveryEmailSentAt       DateTime?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   tenantId         String
@@ -440,11 +591,85 @@ model Order {
   customer         Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
   shippingMethod   ShippingMethod? @relation(fields: [shippingMethodId], references: [id])
   tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  paymentSessions  StorePaymentSession[]
+  returnRequests   OrderReturnRequest[]
+  refundRecords    ReturnRefundRecord[]
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([customerId])
   @@map("orders")
+}
+
+/// Mağaza vitrini sipariş ödemeleri (PayTR vb.) — abonelik Payment modelinden ayrı.
+model StorePaymentSession {
+  id              String                    @id @default(uuid())
+  tenantId        String
+  orderId         String
+  provider        String                    @default("PAYTR")
+  merchantOid     String                    @unique
+  amountKurus     Int
+  status          StorePaymentSessionStatus @default(INITIATED)
+  providerPayload Json?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  tenant          Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order           Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, orderId])
+  @@index([orderId, status])
+  @@map("store_payment_sessions")
+}
+
+enum StorePaymentSessionStatus {
+  INITIATED
+  SUCCESS
+  FAILED
+}
+
+/// Mağaza vitrini ödeme sağlayıcı ayarları (tenant bazlı).
+enum PaymentProviderType {
+  PAYTR
+  IYZICO
+  BANK_POS
+  BANK_TRANSFER
+  CASH_ON_DELIVERY
+}
+
+model TenantPaymentSetting {
+  id                   String              @id @default(uuid())
+  tenantId             String
+  provider             PaymentProviderType
+  isActive             Boolean             @default(false)
+  isTestMode           Boolean             @default(true)
+  displayName          String?
+  /// Şifreli JSON — merchant_key vb. (encryptCredential)
+  credentialsEncrypted String?
+  /// Vitrine güvenle açılabilen alanlar (IBAN maskeli, açıklama vb.)
+  publicConfigJson     Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  tenant               Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([tenantId, isActive])
+  @@map("tenant_payment_settings")
+}
+
+/// Kiracı vitrin kargo ayarları (sabit ücret + ücretsiz kargo limiti)
+model TenantShippingSetting {
+  id                    String   @id @default(uuid())
+  tenantId              String   @unique
+  isActive              Boolean  @default(true)
+  displayName           String   @default("Standart Kargo")
+  standardShippingCost  Decimal  @default(0) @db.Decimal(10, 2)
+  freeShippingThreshold Decimal? @db.Decimal(10, 2)
+  description           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_shipping_settings")
 }
 
 model OrderItem {
@@ -457,11 +682,76 @@ model OrderItem {
   orderId        String
   productId      String
   variantId      String?
-  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+  order              Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant            ProductVariant?     @relation(fields: [variantId], references: [id])
+  returnRequestItems ReturnRequestItem[]
 
   @@map("order_items")
+}
+
+model OrderReturnRequest {
+  id            String              @id @default(uuid())
+  requestNumber String              @unique
+  tenantId      String
+  orderId       String
+  customerId    String
+  type          ReturnRequestType
+  status        ReturnRequestStatus @default(PENDING)
+  reason        String
+  customerNote    String?
+  adminNote       String?
+  stockRestoredAt DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order         Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer      Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items         ReturnRequestItem[]
+  refundRecords ReturnRefundRecord[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, orderId])
+  @@index([customerId])
+  @@map("order_return_requests")
+}
+
+/// Manuel ödeme iadesi kaydı (gateway API yok).
+model ReturnRefundRecord {
+  id              String             @id @default(uuid())
+  tenantId        String
+  returnRequestId String
+  orderId         String
+  customerId      String
+  amount          Decimal            @db.Decimal(10, 2)
+  currency        String             @default("TRY")
+  method          RefundMethod
+  status          RefundRecordStatus @default(RECORDED)
+  note            String?
+  refundedAt      DateTime
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  returnRequest   OrderReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  order           Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer        Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, returnRequestId])
+  @@index([returnRequestId, status])
+  @@map("return_refund_records")
+}
+
+model ReturnRequestItem {
+  id          String             @id @default(uuid())
+  requestId   String
+  orderItemId String
+  quantity    Int
+  reason      String?
+  request     OrderReturnRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem          @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, orderItemId])
+  @@map("return_request_items")
 }
 
 model Settings {
@@ -1001,6 +1291,44 @@ model DiscountRule {
   @@map("discount_rules")
 }
 
+// Otomatik fiyat kuralları (XML / senkron sırasında uygulanır)
+model PricingRule {
+  id         String   @id @default(uuid())
+  tenantId   String
+  name       String?
+  type       String   // PERCENT | FIXED
+  value      Decimal  @db.Decimal(12, 4)
+  applyTo    String   // ALL | CATEGORY | BRAND
+  categoryId String?
+  brand      String?
+  isActive   Boolean  @default(true)
+  priority   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, isActive])
+  @@index([tenantId, applyTo])
+  @@map("pricing_rules")
+}
+
+// Trendyol / marketplace global fiyat stratejisi (tenant başına)
+model PricingSettings {
+  id          String   @id @default(uuid())
+  tenantId    String   @unique
+  type        String   @default("none") // none | percent | fixed
+  value       Decimal  @default(0) @db.Decimal(12, 4)
+  vatRate     Decimal  @default(20) @db.Decimal(5, 2)
+  rounding    Int      @default(2)
+  vatIncluded Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("pricing_settings")
+}
+
 model B2BProfile {
   id             String    @id @default(uuid())
   userId         String    @unique
@@ -1067,6 +1395,38 @@ model ImportLog {
   @@index([status])
   @@index([createdBy])
   @@map("import_logs")
+}
+
+/// Kayıtlı XML feed — periyodik veya manuel senkron.
+model XmlSource {
+  id             String    @id @default(uuid())
+  tenantId       String
+  name           String
+  url            String
+  mapping        Json      // Record<string, string> — XML alanı → hedef alan
+  duplicateMode  String    @default("update") // skip | update | error
+  skipZeroStock  Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  // ── Auto sync scheduling (per source) ──────────────────────────────────────
+  autoSyncEnabled       Boolean  @default(false)
+  // Allowed: 1 | 6 | 12. If null and autoSyncEnabled=true, treated as "daily".
+  autoSyncIntervalHours Int?
+  // 0-23
+  autoSyncAtHour        Int?     @default(3)
+  // 0-59
+  autoSyncAtMinute      Int?     @default(0)
+  // IANA timezone. Example: "Europe/Istanbul"
+  autoSyncTimezone      String   @default("Europe/Istanbul")
+  lastSyncAt     DateTime?
+  lastSyncError  String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, url])
+  @@index([tenantId, isActive])
+  @@map("xml_sources")
 }
 
 // ─── Brand (Marka yönetimi) ───────────────────────────────────────────────────
@@ -1259,6 +1619,7 @@ enum TenantStatus {
 
 enum UserRole {
   OWNER        // Full access
+  SUPER_ADMIN  // Platform operator (SaaS console)
   ADMIN        // Most access
   STAFF        // Limited access
   USER         // Customer/basic user
@@ -1276,6 +1637,32 @@ enum OrderStatus {
   PAID
   SHIPPED
   DELIVERED
+  CANCELLED
+}
+
+enum ReturnRequestType {
+  CANCEL_REQUEST
+  RETURN_REQUEST
+}
+
+enum ReturnRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum RefundMethod {
+  MANUAL_BANK_TRANSFER
+  CASH
+  PAYTR_MANUAL
+  IYZICO_MANUAL
+  OTHER
+}
+
+enum RefundRecordStatus {
+  RECORDED
   CANCELLED
 }
 
@@ -1763,4 +2150,73 @@ model ApiKey {
   @@index([key])
   @@index([prefix])
   @@map("api_keys")
+}
+
+model Lead {
+  id        String   @id @default(uuid())
+  name      String?
+  email     String
+  source    String   @default("landing")
+  tenantId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([source])
+  @@index([tenantId])
+  @@map("leads")
+}
+
+model LegalAcceptance {
+  id                String   @id @default(uuid())
+  userId            String?
+  tenantId          String?
+  email             String
+  kvkkAccepted      Boolean  @default(false)
+  privacyAccepted   Boolean  @default(false)
+  termsAccepted     Boolean  @default(false)
+  acceptedAt        DateTime @default(now())
+  policyVersion     String   @default("v1")
+  ipAddress         String?
+  userAgent         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant            Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([email])
+  @@map("legal_acceptances")
+}
+
+// ─── Platform observability logs (Winston → UI) ───────────────────────────────
+
+model PlatformLogEntry {
+  id           String   @id @default(uuid())
+  level        String
+  module       String
+  action       String
+  status       String?
+  traceId      String?
+  tenantId     String?
+  userId       String?
+  message      String
+  errorMessage String?
+  stack        String?  @db.Text
+  event        String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([level, createdAt(sort: Desc)])
+  @@index([module])
+  @@index([traceId])
+  @@index([event, createdAt(sort: Desc)])
+  @@map("platform_log_entries")
 }

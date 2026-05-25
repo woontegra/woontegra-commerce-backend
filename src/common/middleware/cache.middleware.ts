@@ -16,8 +16,11 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
       return next();
     }
 
-    // Generate cache key
-    const tenantId = (req as any).tenantId || 'public';
+    // Tenant-scoped cache (must match invalidateCache `products:${tenantId}:*`)
+    const tenantId = (req as any).user?.tenantId as string | undefined;
+    if (!tenantId) {
+      return next();
+    }
     const cacheKey = `${keyPrefix}:${tenantId}:${req.originalUrl}`;
 
     try {

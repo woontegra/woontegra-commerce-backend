@@ -17,12 +17,14 @@ import {
 } from './common/middleware/security.middleware';
 
 import authRoutes from './modules/auth/auth.routes';
+import onboardingRoutes from './modules/onboarding/onboarding.routes';
 import tenantRoutes from './modules/tenants/tenant.routes';
 import productRoutes from './modules/products/product.routes';
 import customerRoutes from './modules/customers/customer.routes';
 import categoryRoutes from './modules/categories/category.routes';
 import brandRoutes from './modules/brands/brand.routes';
 import orderRoutes from './modules/orders/order.routes';
+import returnRequestRoutes from './modules/returns/return-request.routes';
 import settingsRoutes from './modules/settings/settings.routes';
 import planRoutes from './modules/plan/plan.routes';
 import supportRoutes from './modules/support/support.routes';
@@ -33,6 +35,8 @@ import billingRoutes from './modules/billing/billing.routes';
 import adminRoutes from './modules/admin/admin.routes';
 import { tenantLifecycleGuard } from './modules/lifecycle/lifecycle.middleware';
 import { startLifecycleCron } from './modules/lifecycle/lifecycle.cron';
+import { startXmlSourceSyncJob } from './jobs/xml-source-sync.job';
+import { assertMarketplaceEncryptionKeyConfigured } from './common/crypto/marketplace-credential.crypto';
 import featureRoutes from './modules/features/feature.routes';
 import { FeatureService } from './modules/features/feature.service';
 import notificationRoutes from './modules/notifications/notification.routes';
@@ -64,13 +68,24 @@ import exportRoutes            from './modules/export/export.routes';
 import apiKeyRoutes            from './modules/api-keys/api-key.routes';
 import uploadOptimizedRoutes   from './modules/upload/upload-optimized.routes';
 import batchRoutes             from './modules/batch/batch.routes';
+import observabilityRoutes     from './modules/observability/observability.routes';
+import xmlSourceRoutes         from './modules/xml-sources/xml-source.routes';
+import { cronSync as xmlSourcesCronSync } from './modules/xml-sources/xml-source.controller';
+import pricingRuleRoutes       from './modules/pricing/pricing-rule.routes';
+import pricingSettingsRoutes   from './modules/pricing/pricing-settings.routes';
+import storePublicRoutes       from './modules/store-public/store-public.routes';
+import paymentSettingsRoutes   from './modules/payments/payment-settings.routes';
+import shippingSettingsRoutes  from './modules/shipping/shipping-settings.routes';
 import superAdminRoutes        from './modules/superadmin/superadmin.routes';
 import invoiceRoutes           from './modules/billing/invoice.routes';
 import stockSyncRoutes          from './modules/stock/stock-sync.routes';
+import leadRoutes               from './modules/leads/lead.routes';
 import { pingMeilisearch } from './config/meilisearch';
 import { searchService }   from './modules/search/search.service';
 import { initializeQueues, closeQueues } from './queues';
 import { bullBoardRouter } from './queues/bull-board';
+
+assertMarketplaceEncryptionKeyConfigured();
 
 const app: Application = express();
 
@@ -130,7 +145,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-trace-id', 'X-Store-Frontend-Host'],
 }));
 
 // Request size and sanitization
@@ -161,9 +176,10 @@ app.get('/health', (req, res) => {
 
 // API routes with authentication
 app.use('/api/auth', authRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/billing', billingRoutes);
-app.use('/api/admin',   adminRoutes);
+app.use('/api/admin',   authenticate, adminRoutes);
 app.use('/api/features',       featureRoutes);
 app.use('/api/notifications',  notificationRoutes);
 app.use('/api/search',         searchRoutes);
@@ -174,17 +190,26 @@ app.use('/api/webhooks',       webhookRoutes);
 app.use('/api/v1',             publicApiRouter);  // Public REST API (API token auth)
 app.use('/api/support', supportRoutes);
 app.use('/api/seo', seoRoutes);
+app.use('/api/store', storePublicRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 
 // Protected routes with authentication, tenant isolation + lifecycle guard
 app.use('/api/tenants',   authenticate, requireTenantAccess, tenantLifecycleGuard, tenantRoutes);
 app.use('/api/products',  authenticate, requireTenantAccess, tenantLifecycleGuard, productRoutes);
+app.use('/api/pricing-rules', authenticate, requireTenantAccess, tenantLifecycleGuard, pricingRuleRoutes);
+app.use('/api/pricing-settings', authenticate, requireTenantAccess, tenantLifecycleGuard, pricingSettingsRoutes);
+app.use('/api/payment-settings', authenticate, requireTenantAccess, tenantLifecycleGuard, paymentSettingsRoutes);
+app.use('/api/shipping-settings', authenticate, requireTenantAccess, tenantLifecycleGuard, shippingSettingsRoutes);
+// Harici cron — JWT gerekmez; XML_CRON_SECRET + X-Xml-Cron-Secret
+app.post('/api/xml-sources/cron/sync', express.json(), asyncHandler(xmlSourcesCronSync));
+app.use('/api/xml-sources', authenticate, requireTenantAccess, tenantLifecycleGuard, xmlSourceRoutes);
 app.use('/api/customers', authenticate, requireTenantAccess, tenantLifecycleGuard, customerRoutes);
 app.use('/api/categories', authenticate, requireTenantAccess, tenantLifecycleGuard, categoryRoutes);
 app.use('/api/brands',    authenticate, requireTenantAccess, tenantLifecycleGuard, brandRoutes);
 app.use('/api/attributes',         authenticate, requireTenantAccess, attributeRoutes);
 app.use('/api/category-attributes', authenticate, requireTenantAccess, categoryAttributeRoutes);
 app.use('/api/orders',    authenticate, requireTenantAccess, tenantLifecycleGuard, orderRoutes);
+app.use('/api/returns',   authenticate, requireTenantAccess, tenantLifecycleGuard, returnRequestRoutes);
 app.use('/api/campaigns', authenticate, requireTenantAccess, tenantLifecycleGuard, campaignRoutes);
 app.use('/api/coupons',   authenticate, requireTenantAccess, couponRoutes);
 app.use('/api/trendyol',        authenticate, requireTenantAccess, trendyolRoutes);
@@ -202,9 +227,11 @@ app.use('/api/export',          authenticate, requireTenantAccess, exportRoutes)
 app.use('/api/api-keys',        authenticate, requireTenantAccess, apiKeyRoutes);
 app.use('/api/upload-optimized', authenticate, requireTenantAccess, uploadOptimizedRoutes);
 app.use('/api/batch',           authenticate, requireTenantAccess, batchRoutes);
+app.use('/api/observability',   authenticate, requireTenantAccess, observabilityRoutes);
 app.use('/api/superadmin',      superAdminRoutes); // Auth + SuperAdmin middleware inside
 app.use('/api/invoices',        authenticate, invoiceRoutes); // Auth inside router
 app.use('/api/stock-sync',      authenticate, stockSyncRoutes); // Auth inside router
+app.use('/api/leads',           leadRoutes);
 app.use('/admin/queues', authenticate, bullBoardRouter); // Bull Board dashboard
 app.use('/api/reports',  reportsRoutes);   // authenticate is applied inside the router
 // Static uploads — Cross-Origin-Resource-Policy must be "cross-origin" so the
@@ -227,6 +254,9 @@ app.use(errorHandler);
 
 // Start lifecycle cron
 startLifecycleCron();
+if (process.env.XML_SOURCE_CRON_ENABLED !== 'false') {
+  startXmlSourceSyncJob();
+}
 
 // Meilisearch: connect + setup index (non-blocking)
 pingMeilisearch().then(ok => {
@@ -240,6 +270,10 @@ new FeatureService().syncFeatureDefinitions().catch((err) =>
 
 // Start server
 const server = app.listen(config.port, async () => {
+  // Trendyol fiyat/stok poll işlemleri 2–3 dk sürebilir
+  server.setTimeout(600_000);
+  server.keepAliveTimeout = 620_000;
+  server.headersTimeout = 625_000;
   const message = `
 ╔══════════════════════════════════════════════════╗
 ║                                                           ║

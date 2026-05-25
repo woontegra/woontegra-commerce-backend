@@ -7,6 +7,7 @@ import { validate, schemas } from '../../common/middleware/validation.middleware
 import { cacheMiddleware } from '../../common/middleware/cache.middleware';
 import { xmlUploader, importXml, previewXml, importHistory, previewXmlFromUrl, importXmlFromUrl, importXmlStream, importXmlFromUrlStream } from './xml-import.controller';
 import { exportXml } from './xml-export.controller';
+import { enforceProductLimit } from '../../common/middleware/featureProtection';
 
 // Note: authenticate + requireTenantAccess + tenantLifecycleGuard are applied
 // globally in main.ts — do NOT add them again here (causes double DB queries)
@@ -25,13 +26,13 @@ const withXmlUpload = (handler: any) => (req: any, res: any) =>
   });
 
 router.post('/import/xml/preview',      withXmlUpload(previewXml));
-router.post('/import/xml',              withXmlUpload(importXml));
+router.post('/import/xml',              enforceProductLimit, withXmlUpload(importXml));
 // Streaming imports (NDJSON progress events)
-router.post('/import/xml/stream',       withXmlUpload(importXmlStream));
-router.post('/import/xml/stream-url',   importXmlFromUrlStream as any);
+router.post('/import/xml/stream',       enforceProductLimit, withXmlUpload(importXmlStream));
+router.post('/import/xml/stream-url',   enforceProductLimit, importXmlFromUrlStream as any);
 // URL-based import (no file upload needed)
 router.post('/import/xml/preview-url', previewXmlFromUrl as any);
-router.post('/import/xml/from-url',    importXmlFromUrl  as any);
+router.post('/import/xml/from-url',    enforceProductLimit, importXmlFromUrl  as any);
 router.get ('/import/history',     importHistory as any);
 router.get ('/export/xml',         exportXml     as any);
 
@@ -42,17 +43,19 @@ router.post('/upload-image', ctrl.uploadImage);
 router.patch('/bulk/category',       ctrl.bulkCategory);
 router.patch('/bulk/price',          ctrl.bulkPrice);
 router.patch('/bulk/stock',          ctrl.bulkStock);
-router.post ('/bulk-price-update',   ctrl.bulkPriceUpdate);  // enhanced: variant + tax support
+router.post ('/bulk-delete',          ctrl.bulkDelete);
+router.post ('/bulk-price-update/preview', ctrl.bulkPriceUpdatePreview);
+router.post ('/bulk-price-update',         ctrl.bulkPriceUpdate);
 
 // Filter endpoints — must be before /:id routes
 router.get('/filter',         cacheMiddleware({ ttl: 60, keyPrefix: 'products-filter' }), filterCtrl.getFilteredProducts.bind(filterCtrl));
 router.get('/filter/options', cacheMiddleware({ ttl: 300, keyPrefix: 'filter-options' }), filterCtrl.getFilterOptions.bind(filterCtrl));
 
 // Standard CRUD
-router.get ('/',            cacheMiddleware({ ttl: 300, keyPrefix: 'products' }),     ctrl.getAll);
+router.get ('/',            cacheMiddleware({ ttl: 30, keyPrefix: 'products' }),      ctrl.getAll);
 router.get ('/slug/:slug',  cacheMiddleware({ ttl: 600, keyPrefix: 'product-slug' }), (req, res) => ctrl.getBySlug(req, res));
 router.get ('/:id',         cacheMiddleware({ ttl: 600, keyPrefix: 'product' }),      ctrl.getById);
-router.post('/',            validate(schemas.createProduct),                           ctrl.create);
+router.post('/',            enforceProductLimit, validate(schemas.createProduct),     ctrl.create);
 router.put ('/:id',         validate(schemas.updateProduct),                           ctrl.update);
 router.patch('/:id',        validate(schemas.updateProduct),                           ctrl.patch);
 router.patch('/:id/quick',                                                              ctrl.quickUpdate);

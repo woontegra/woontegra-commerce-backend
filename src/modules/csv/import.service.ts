@@ -6,17 +6,22 @@ import {
 import { generateUniqueProductSlug } from '../../common/utils/slug.utils';
 import { searchService, toProductDocument } from '../search/search.service';
 import { logger } from '../../config/logger';
+import { createProductQuotaTracker, invalidateTenantProductUsageCache } from '../../services/planQuota.service';
+import { syncOnboardingCompletionForTenant } from '../../services/onboardingCompletion.service';
 
 const prisma = new PrismaClient();
 
 // ─── Result types ─────────────────────────────────────────────────────────────
 
 export interface ImportResult {
-  total:    number;
-  created:  number;
-  updated:  number;
-  skipped:  number;
-  errors:   RowError[];
+  total:              number;
+  created:            number;
+  updated:            number;
+  skipped:            number;
+  errors:             RowError[];
+  /** Yalnızca yeni ürün kotası nedeniyle atlanan satır sayısı */
+  skippedPlanLimit?:  number;
+  reason?:            'PLAN_LIMIT';
 }
 
 // ─── Shared: resolve category by name ────────────────────────────────────────
@@ -60,6 +65,7 @@ export async function importProducts(
 
   const categoryCache = new Map<string, string>();
   const toIndex: any[] = [];
+  const productQuota = await createProductQuotaTracker(tenantId);
 
   for (let i = 0; i < rows.length; i++) {
     const rowNum = i + 2; // 1-based + header row
@@ -130,11 +136,18 @@ export async function importProducts(
         result.updated++;
       } else {
         // ── Create ───────────────────────────────────────────────────
+        if (!productQuota.canCreate()) {
+          productQuota.recordPlanLimitSkip();
+          result.errors.push({ row: rowNum, field: 'plan', message: 'Plan ürün kotası doldu; satır atlandı.' });
+          result.skipped++;
+          continue;
+        }
         const slug = row.slug?.trim() || await generateUniqueProductSlug(productData.name as string, tenantId);
         const created = await prisma.product.create({
           data:    { ...(productData as any), slug },
           include: { category: true, variants: true },
         });
+        productQuota.recordCreated();
         toIndex.push(created);
         result.created++;
       }
@@ -155,6 +168,14 @@ export async function importProducts(
     ...result,
   });
 
+  void invalidateTenantProductUsageCache(tenantId).catch(() => {});
+  void syncOnboardingCompletionForTenant(tenantId).catch(() => {});
+
+  const skippedPlanLimit = productQuota.getSkippedPlanLimit();
+  if (skippedPlanLimit > 0) {
+    result.skippedPlanLimit = skippedPlanLimit;
+    result.reason           = 'PLAN_LIMIT';
+  }
   return result;
 }
 

@@ -63,6 +63,12 @@ export {
 };
 
 // Export queue functions
-export { sendEmailAsync, sendBulkEmailsAsync } from './email.queue';
+export {
+  sendEmailAsync,
+  sendBulkEmailsAsync,
+  queuePasswordResetEmail,
+  queueSubscriptionEmail,
+  queueErrorAlertEmail,
+} from './email.queue';
 export { triggerWebhookAsync } from './webhook.queue';
 export { processImageAsync } from './image-processing.queue';

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { TrendyolService, TRENDYOL_CARGO_COMPANIES } from './trendyol.service';
+import { TrendyolService, TRENDYOL_CARGO_COMPANIES, type ValidationReport } from './trendyol.service';
 import { batchStore } from './trendyol.queue';
 import prisma from '../../config/database';
 import { orderSyncService } from './trendyol-order-sync.service';
@@ -9,6 +9,23 @@ const svc = new TrendyolService();
 
 function tid(req: Request) {
   return req.user?.tenantId as string;
+}
+
+function isCategorySkipReport(r: ValidationReport): boolean {
+  return !r.canSend && r.issues.length > 0 && r.issues.every(i => i.code === 'NO_CATEGORY_MAP');
+}
+
+function hasHardErrors(r: ValidationReport): boolean {
+  return r.issues.some(i => i.level === 'error');
+}
+
+function buildValidationSummary(reports: ValidationReport[], total: number) {
+  const skipped  = reports.filter(isCategorySkipReport).length;
+  const errors   = reports.filter(r => !r.canSend && hasHardErrors(r)).length;
+  const warnings = reports.filter(r => r.canSend && r.issues.some(i => i.level === 'warning')).length;
+  const clean    = reports.filter(r => r.canSend && r.issues.length === 0).length;
+  const sendable = reports.filter(r => r.canSend).length;
+  return { total, errors, warnings, clean, skipped, sendable };
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -157,7 +174,7 @@ export const getProducts = async (req: Request, res: Response) => {
       search:             q.search,
       mapped:             q.mapped,
       categoryId:         q.categoryId,
-      onlyMappedCategories: q.onlyMappedCategories === 'true' || q.onlyMappedCategories === undefined,
+      onlyMappedCategories: q.onlyMappedCategories === 'true',
     });
     res.json(data);
   } catch (err: any) {
@@ -191,11 +208,8 @@ export const validateProducts = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'productIds dizisi zorunludur.' });
     }
     const reports = await svc.validateProducts(tid(req), productIds);
-    // Summary stats
-    const errors   = reports.filter(r => !r.canSend).length;
-    const warnings = reports.filter(r => r.canSend && r.issues.length > 0).length;
-    const clean    = productIds.length - reports.length; // products with no issues
-    res.json({ data: reports, summary: { total: productIds.length, errors, warnings, clean } });
+    const summary = buildValidationSummary(reports, productIds.length);
+    res.json({ data: reports, summary });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -209,8 +223,8 @@ export const validateProducts = async (req: Request, res: Response) => {
  * Flow:
  *   1. Validate every product (reuses validateProducts service method).
  *   2. Separate valid from invalid.
- *   3. If skipInvalid !== true and there are blocking errors → 400 with details.
- *   4. Enqueue valid products via batchStore + sendProductsBulk.
+ *   3. If skipInvalid is false and there are hard (non-skip) errors → 400 with details.
+ *   4. Enqueue canSend=true products via batchStore + sendProductsBulk.
  *   5. Respond immediately with { batchId, queuedCount, skippedCount }.
  *      Progress is polled via GET /trendyol/batches/:batchId.
  *
@@ -218,7 +232,7 @@ export const validateProducts = async (req: Request, res: Response) => {
  */
 export const sendProducts = async (req: Request, res: Response) => {
   try {
-    const { productIds, skipInvalid = false } = req.body as {
+    const { productIds, skipInvalid = true } = req.body as {
       productIds: string[];
       skipInvalid?: boolean;
     };
@@ -233,29 +247,23 @@ export const sendProducts = async (req: Request, res: Response) => {
     // ── 2. Pre-flight validation (reuse service method, no duplicate logic) ──
     // reports always contains one entry per requested product (canSend=true → ok/warn, false → error)
     const reports        = await svc.validateProducts(tenantId, productIds);
-    const invalidReports = reports.filter(r => !r.canSend);
-    const validReports   = reports.filter(r =>  r.canSend);
+    const validReports   = reports.filter(r => r.canSend);
+    const hardErrorReports = reports.filter(r => hasHardErrors(r));
 
-    // ── 3. Block if skipInvalid is off and there are hard errors ─────────────
-    if (!skipInvalid && invalidReports.length > 0) {
+    // ── 3. Block only on hard errors when skipInvalid is off (category skips never block batch) ──
+    if (!skipInvalid && hardErrorReports.length > 0) {
       return res.status(400).json({
-        error:           'Bazı ürünlerde gönderim hatası var. Lütfen hataları giderin veya skipInvalid: true ile sadece geçerli ürünleri gönderin.',
-        invalidProducts: invalidReports.map(r => ({
+        error:           'Bazı ürünlerde gönderim hatası var. Lütfen hataları giderin veya skipInvalid: true ile geçerli ürünleri gönderin.',
+        invalidProducts: hardErrorReports.map(r => ({
           productId: r.productId,
-          issues:    r.issues,
+          issues:    r.issues.filter(i => i.level === 'error'),
         })),
-        summary: {
-          total:   reports.length,
-          valid:   validReports.length,
-          invalid: invalidReports.length,
-        },
+        summary: buildValidationSummary(reports, reports.length),
       });
     }
 
-    // ── 4. Decide which IDs to queue ─────────────────────────────────────────
-    //   skipInvalid=true  → only canSend=true products are queued
-    //   skipInvalid=false → we already blocked above, so all reports are sendable
-    const idsToSend = (skipInvalid ? validReports : reports).map(r => r.productId);
+    // ── 4. Queue sendable products (unmapped categories are skipped per product) ──
+    const idsToSend = validReports.map(r => r.productId);
 
     if (idsToSend.length === 0) {
       return res.status(400).json({ error: 'Gönderilecek geçerli ürün bulunamadı. Ürünlerde giderilmemiş hatalar var.' });
@@ -315,10 +323,15 @@ export const manualPriceStockUpdate = async (req: Request, res: Response) => {
   }
 };
 
-/** GET /trendyol/products/mapped-with-variants */
+/** GET /trendyol/products/mapped-with-variants?page&limit&search */
 export const getMappedProductsWithVariants = async (req: Request, res: Response) => {
   try {
-    const data = await svc.getMappedProductsWithVariants(tid(req));
+    const q = req.query as Record<string, string | undefined>;
+    const page  = Math.max(1, parseInt(q.page ?? '1', 10) || 1);
+    const limit = Math.min(100, parseInt(q.limit ?? '20', 10) || 20);
+    const search = q.search?.trim() || undefined;
+
+    const data = await svc.getMappedProductsWithVariants(tid(req), { page, limit, search });
     res.json({ data });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -376,18 +389,14 @@ export const bulkSendProducts = async (req: Request, res: Response) => {
     let skippedCount        = 0;
 
     if (!skipInvalid) {
-      const reports        = await svc.validateProducts(tenantId, productIds);
-      const invalidReports = reports.filter(r => !r.canSend);
+      const reports          = await svc.validateProducts(tenantId, productIds);
+      const hardErrorReports = reports.filter(r => hasHardErrors(r));
 
-      if (invalidReports.length > 0) {
+      if (hardErrorReports.length > 0) {
         return res.status(400).json({
           error:           'Bazı ürünlerde gönderim hatası var.',
-          invalidProducts: invalidReports.map(r => ({ productId: r.productId, issues: r.issues })),
-          summary: {
-            total:   reports.length,
-            valid:   reports.length - invalidReports.length,
-            invalid: invalidReports.length,
-          },
+          invalidProducts: hardErrorReports.map(r => ({ productId: r.productId, issues: r.issues })),
+          summary: buildValidationSummary(reports, reports.length),
         });
       }
 

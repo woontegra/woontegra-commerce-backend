@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '../../utils/logger';
+import { appLogger } from '../logging/loggers';
+import { getTraceId } from '../logging/trace-context';
 import { AppError } from './AppError';
 
 interface ErrorResponse {
@@ -16,18 +17,26 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ): void => {
-  const traceId = req.headers['x-request-id'] as string || generateTraceId();
-  
-  // Log the error
-  logger.error({
-    message: error.message,
-    stack: error.stack,
+  const traceId =
+    (req as Request & { traceId?: string }).traceId ||
+    (req.headers['x-trace-id'] as string) ||
+    (req.headers['x-request-id'] as string) ||
+    getTraceId() ||
+    generateTraceId();
+
+  const user = (req as Request & { user?: { userId?: string; id?: string; tenantId?: string } }).user;
+
+  appLogger.error({
+    action:     'http_error',
+    status:     'failure',
+    message:    error.message,
     traceId,
-    userId: (req as any).user?.id,
-    tenantId: (req as any).user?.tenantId,
-    path: req.path,
-    method: req.method,
-    timestamp: new Date().toISOString(),
+    userId:     user?.userId ?? user?.id ?? null,
+    tenantId:   user?.tenantId ?? null,
+    path:       req.path,
+    method:     req.method,
+    statusCode: error instanceof AppError ? error.statusCode : 500,
+    error,
   });
 
   // Determine if this is an AppError or a generic error
@@ -58,14 +67,20 @@ export const asyncHandler = (fn: Function) => {
 };
 
 export const notFoundHandler = (req: Request, res: Response) => {
-  const traceId = req.headers['x-request-id'] as string || generateTraceId();
+  const traceId =
+    (req as Request & { traceId?: string }).traceId ||
+    (req.headers['x-trace-id'] as string) ||
+    (req.headers['x-request-id'] as string) ||
+    getTraceId() ||
+    generateTraceId();
   
-  logger.warn({
+  appLogger.warn({
+    action:  'route_not_found',
+    status:  'failure',
     message: 'Route not found',
     traceId,
-    path: req.path,
-    method: req.method,
-    timestamp: new Date().toISOString(),
+    path:    req.path,
+    method:  req.method,
   });
 
   res.status(404).json({

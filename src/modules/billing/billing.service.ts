@@ -1,10 +1,17 @@
 import Iyzipay from 'iyzipay';
 import crypto from 'crypto';
 import { PrismaClient, Plan, SubscriptionStatus, PaymentStatus, BillingCycle } from '@prisma/client';
-import { logger } from '../../config/logger';
+import { logBusinessEvent } from '../../common/logging/business-events';
+import { billingLogger } from '../../common/logging/loggers';
 import { InvoiceService } from './invoice.service';
 import { eventBus } from '../notifications/events';
 import { auditService, AuditCategory, AuditAction } from '../audit/audit.service';
+import {
+  isPaymentSuccessful,
+  subscriptionStatusAfterFailedPayment,
+  subscriptionStatusAfterSuccessfulPayment,
+  tenantStatusAfterSuccessfulPayment,
+} from './billing-activation.util';
 
 const invoiceService = new InvoiceService();
 
@@ -170,7 +177,7 @@ export class BillingService {
       iyzipay.checkoutFormInitialize.create(request, async (err: any, result: any) => {
         if (err || result.status !== 'success') {
           const errMsg = err?.message || result?.errorMessage || 'iyzico checkout başlatılamadı.';
-          logger.error({ message: 'iyzico init failed', error: errMsg, paymentId: payment.id });
+          billingLogger.error({ action: 'checkout_init', status: 'failure', message: 'iyzico init failed', error: errMsg, paymentId: payment.id, tenantId: payment.tenantId, userId: payment.userId });
 
           await prisma.payment.update({
             where: { id: payment.id },
@@ -189,7 +196,7 @@ export class BillingService {
           data:  { iyzicoToken: result.token },
         });
 
-        logger.info({ message: 'iyzico checkout created', paymentId: payment.id, token: result.token });
+        billingLogger.info({ action: 'checkout_init', status: 'success', message: 'iyzico checkout created', paymentId: payment.id, tenantId: payment.tenantId, userId: payment.userId });
 
         resolve({
           checkoutFormContent: result.checkoutFormContent,
@@ -214,7 +221,7 @@ export class BillingService {
     });
 
     if (!payment) {
-      logger.warn({ message: 'Callback: payment not found', token });
+      billingLogger.warn({ action: 'payment_callback', status: 'failure', message: 'payment not found', token });
       return { status: 'failed', redirectUrl: `${frontendUrl}/payment-result?status=failed&reason=not_found` };
     }
 
@@ -232,7 +239,7 @@ export class BillingService {
         async (err: any, result: any) => {
           if (err || result.status !== 'success' || result.paymentStatus !== 'SUCCESS') {
             const reason = result?.errorMessage || result?.paymentStatus || err?.message || 'payment_failed';
-            logger.error({ message: 'iyzico payment failed', token, reason });
+            billingLogger.error({ action: 'payment_callback', status: 'failure', message: 'iyzico payment failed', token, reason, tenantId: payment.tenantId, userId: payment.userId });
 
             await prisma.payment.update({
               where: { id: payment.id },
@@ -297,7 +304,10 @@ export class BillingService {
             const now = new Date();
             await prisma.subscription.update({
               where: { id: payment.subscriptionId },
-              data:  { status: SubscriptionStatus.ACTIVE, startDate: now },
+              data:  {
+                status:    subscriptionStatusAfterSuccessfulPayment(payment.subscription.status),
+                startDate: now,
+              },
             });
 
             // Record successful payment
@@ -313,7 +323,7 @@ export class BillingService {
             // ── Lifecycle: activate tenant ────────────────────────────────
             const activatedTenant = await prisma.tenant.update({
               where:   { id: payment.tenantId },
-              data:    { status: 'ACTIVE', suspendedAt: null },
+              data:    { status: tenantStatusAfterSuccessfulPayment(), suspendedAt: null },
               include: { users: { take: 1, where: { role: 'ADMIN' } } },
             });
 
@@ -379,11 +389,30 @@ export class BillingService {
               data:  { plan: payment.subscription.plan },
             });
 
-            logger.info({
-              message:       'Subscription activated',
+            billingLogger.info({
+              action:         'subscription_activated',
+              status:         'success',
+              message:        'Subscription activated after payment',
               subscriptionId: payment.subscriptionId,
               tenantId:       payment.tenantId,
+              userId:         payment.userId,
               plan:           payment.subscription.plan,
+            });
+
+            logBusinessEvent('payment_success', payment.tenantId, {
+              paymentId:      payment.id,
+              subscriptionId: payment.subscriptionId,
+              userId:         payment.userId,
+              amount:         Number(payment.amount),
+              currency:       payment.currency,
+              plan:           payment.subscription.plan,
+              channel:        'iyzico_callback',
+            });
+            logBusinessEvent('subscription_activated', payment.tenantId, {
+              subscriptionId: payment.subscriptionId,
+              plan:           payment.subscription.plan,
+              billingCycle:   payment.subscription.billingCycle,
+              channel:        'iyzico_callback',
             });
 
             resolve({
@@ -391,7 +420,7 @@ export class BillingService {
               redirectUrl: `${frontendUrl}/payment-result?status=success&plan=${payment.subscription.plan}`,
             });
           } catch (dbErr: any) {
-            logger.error({ message: 'DB error after successful payment', error: dbErr?.message });
+            billingLogger.error({ action: 'subscription_activated', status: 'failure', message: 'DB error after successful payment', error: dbErr, tenantId: payment.tenantId, userId: payment.userId });
             resolve({
               status:      'failed',
               redirectUrl: `${frontendUrl}/payment-result?status=failed&reason=db_error`,
@@ -415,7 +444,7 @@ export class BillingService {
         .digest('base64');
 
       if (expected !== iyzicoSignature) {
-        logger.warn({ message: 'iyzico webhook signature mismatch' });
+        billingLogger.warn({ action: 'webhook', status: 'failure', message: 'iyzico webhook signature mismatch' });
         throw new Error('Invalid webhook signature');
       }
     }
@@ -427,7 +456,7 @@ export class BillingService {
       throw new Error('Invalid webhook payload');
     }
 
-    logger.info({ message: 'iyzico webhook received', payload });
+    billingLogger.info({ action: 'webhook', status: 'pending', message: 'iyzico webhook received', iyzicoPaymentId: payload?.iyzicoPaymentId });
 
     const { iyzicoPaymentId, status } = payload;
 
@@ -440,14 +469,39 @@ export class BillingService {
 
     if (!payment) return;
 
-    if (status === 'SUCCESS' && payment.status !== PaymentStatus.SUCCESS) {
+    if (isPaymentSuccessful(status) && payment.status !== PaymentStatus.SUCCESS) {
       await prisma.payment.update({
         where: { id: payment.id },
         data:  { status: PaymentStatus.SUCCESS },
       });
       await prisma.subscription.update({
         where: { id: payment.subscriptionId },
-        data:  { status: SubscriptionStatus.ACTIVE },
+        data:  { status: subscriptionStatusAfterSuccessfulPayment(payment.subscription.status) },
+      });
+      await prisma.tenant.update({
+        where: { id: payment.tenantId },
+        data:  { status: tenantStatusAfterSuccessfulPayment(), suspendedAt: null },
+      });
+      billingLogger.info({
+        action:         'webhook_payment_success',
+        status:         'success',
+        paymentId:      payment.id,
+        subscriptionId: payment.subscriptionId,
+        tenantId:       payment.tenantId,
+        userId:         payment.userId,
+      });
+
+      logBusinessEvent('payment_success', payment.tenantId, {
+        paymentId:      payment.id,
+        subscriptionId: payment.subscriptionId,
+        userId:         payment.userId,
+        amount:         Number(payment.amount),
+        channel:        'iyzico_webhook',
+      });
+      logBusinessEvent('subscription_activated', payment.tenantId, {
+        subscriptionId: payment.subscriptionId,
+        plan:           payment.subscription.plan,
+        channel:        'iyzico_webhook',
       });
     } else if (status === 'FAILURE') {
       await prisma.payment.update({
@@ -457,7 +511,7 @@ export class BillingService {
       if (payment.subscription.status === SubscriptionStatus.PENDING) {
         await prisma.subscription.update({
           where: { id: payment.subscriptionId },
-          data:  { status: SubscriptionStatus.CANCELED },
+          data:  { status: subscriptionStatusAfterFailedPayment() },
         });
       }
     }
@@ -506,7 +560,7 @@ export class BillingService {
       details: { plan: subscription.plan, billingCycle: subscription.billingCycle },
     });
 
-    logger.info({ message: 'Subscription canceled', subscriptionId: subscription.id, tenantId });
+    billingLogger.info({ action: 'subscription_canceled', status: 'success', subscriptionId: subscription.id, tenantId, userId: canceledByUserId });
   }
 
   // ── 6. Billing history ────────────────────────────────────────────────────

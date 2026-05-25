@@ -20,8 +20,8 @@ export function requirePermission(...keys: string[]) {
       return;
     }
 
-    // SUPER_ADMIN bypasses all permission checks
-    if (user.role === 'SUPER_ADMIN') { next(); return; }
+    // SUPER_ADMIN and OWNER bypass all permission checks
+    if (user.role === 'SUPER_ADMIN' || user.role === 'OWNER') { next(); return; }
 
     try {
       const effective = await resolvePermissions(user.id ?? (user as any).userId, user.role);
@@ -57,7 +57,7 @@ export function attachPermissions() {
     try {
       const perms = await resolvePermissions(user.id ?? (user as any).userId, user.role);
       req.perms   = perms;
-      req.can     = (key: string) => user.role === 'SUPER_ADMIN' || perms.has(key);
+      req.can     = (key: string) => user.role === 'SUPER_ADMIN' || user.role === 'OWNER' || perms.has(key);
       next();
     } catch {
       next();

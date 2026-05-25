@@ -10,6 +10,7 @@
  */
 
 import prisma from '../../config/database';
+import { decryptTrendyolCredentials } from '../../common/crypto/marketplace-credential.crypto';
 import { TrendyolClient }    from '../marketplace/clients/trendyol.client';
 import { logger }            from '../../config/logger';
 
@@ -158,10 +159,11 @@ class TrendyolSyncQueueService {
           throw new Error('Aktif Trendyol entegrasyonu yok');
         }
 
+        const creds = decryptTrendyolCredentials(integration);
         const client = new TrendyolClient({
-          apiKey:    integration.apiKey,
-          apiSecret: integration.apiSecret,
-          sellerId:  integration.supplierId,
+          apiKey:    creds.apiKey,
+          apiSecret: creds.apiSecret,
+          sellerId:  creds.sellerId,
         });
 
         // Trendyol'a gönder

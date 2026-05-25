@@ -6,6 +6,8 @@ export enum Plan {
 
 export interface PlanLimits {
   maxProducts: number;
+  maxOrders: number;
+  maxCustomers: number;
   maxVariantsPerProduct: number;
   pageBuilderAccess: boolean;
   blogAccess: boolean;
@@ -14,9 +16,13 @@ export interface PlanLimits {
   prioritySupport: boolean;
 }
 
+export type PlanCountLimitKey = 'maxProducts' | 'maxOrders' | 'maxCustomers' | 'maxVariantsPerProduct';
+
 export const PLAN_CONFIG: Record<Plan, PlanLimits> = {
   [Plan.STARTER]: {
     maxProducts: 50,
+    maxOrders: 200,
+    maxCustomers: 500,
     maxVariantsPerProduct: 3,
     pageBuilderAccess: false,
     blogAccess: false,
@@ -26,6 +32,8 @@ export const PLAN_CONFIG: Record<Plan, PlanLimits> = {
   },
   [Plan.PRO]: {
     maxProducts: 500,
+    maxOrders: 5_000,
+    maxCustomers: 10_000,
     maxVariantsPerProduct: 10,
     pageBuilderAccess: true,
     blogAccess: true,
@@ -34,8 +42,10 @@ export const PLAN_CONFIG: Record<Plan, PlanLimits> = {
     prioritySupport: false,
   },
   [Plan.ENTERPRISE]: {
-    maxProducts: -1, // Unlimited
-    maxVariantsPerProduct: -1, // Unlimited
+    maxProducts: -1,
+    maxOrders: -1,
+    maxCustomers: -1,
+    maxVariantsPerProduct: -1,
     pageBuilderAccess: true,
     blogAccess: true,
     analyticsAccess: true,
@@ -73,12 +83,16 @@ export function canAccessFeature(plan: Plan, feature: keyof PlanLimits): boolean
   return limits[feature] as boolean;
 }
 
-export function isWithinLimit(plan: Plan, limitType: 'maxProducts' | 'maxVariantsPerProduct', currentCount: number): boolean {
-  const limits = getPlanLimits(plan);
-  const limit = limits[limitType];
-  
-  // -1 means unlimited
+export function isWithinLimit(
+  plan: Plan,
+  limitType: PlanCountLimitKey,
+  currentCount: number,
+): boolean {
+  const limit = getPlanLimits(plan)[limitType];
   if (limit === -1) return true;
-  
   return currentCount < limit;
+}
+
+export function getPlanCountLimit(plan: Plan, limitType: PlanCountLimitKey): number {
+  return getPlanLimits(plan)[limitType];
 }

@@ -5,6 +5,8 @@ import { AppError } from '../../common/middleware/error.middleware';
 import { eventBus } from '../notifications/events';
 import { auditService, AuditCategory, AuditAction } from '../audit/audit.service';
 import { invoiceService } from '../../services/invoice.service';
+import { toAdminOrderJson, toAdminOrderListJson } from './order-admin.presenter';
+import { parseOrderListQuery } from './order-list.query';
 
 const VALID_STATUSES = ['PENDING', 'PROCESSING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 
@@ -14,14 +16,30 @@ export class OrderController {
   getAll = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user!.tenantId!;
+      const parsed = parseOrderListQuery(req.query as Record<string, unknown>);
+      if (!parsed.ok) {
+        res.status(400).json({ error: `Geçersiz sorgu parametreleri: ${parsed.error}` });
+        return;
+      }
+
       const result = await this.orderService.getAll(tenantId, {
-        page:   req.query.page   as any,
-        limit:  req.query.limit  as any,
-        status: req.query.status as string,
-        search: req.query.search as string,
+        page:            parsed.data.page,
+        limit:           parsed.data.limit,
+        status:          parsed.data.status,
+        search:          parsed.data.search,
+        paymentProvider: parsed.data.paymentProvider,
+        paymentStatus:   parsed.data.paymentStatus,
       });
 
-      res.status(200).json({ status: 'success', data: result });
+      res.status(200).json({
+        status: 'success',
+        data: {
+          orders:     toAdminOrderListJson(result.orders as never),
+          total:      result.total,
+          page:       result.page,
+          totalPages: result.totalPages,
+        },
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message ?? 'Siparişler alınamadı.' });
     }
@@ -38,7 +56,7 @@ export class OrderController {
         return;
       }
 
-      res.status(200).json({ status: 'success', data: order });
+      res.status(200).json({ status: 'success', data: toAdminOrderJson(order as never) });
     } catch (err: any) {
       res.status(500).json({ error: err.message ?? 'Sipariş alınamadı.' });
     }
@@ -99,6 +117,39 @@ export class OrderController {
     }
   };
 
+  updateShipping = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const id       = req.params.id;
+      const tenantId = req.user!.tenantId!;
+      const { shippingCarrier, shippingTrackingNumber, shippingTrackingUrl, markAsShipped } =
+        req.body ?? {};
+
+      const order = await this.orderService.updateShipping(id, tenantId, {
+        shippingCarrier,
+        shippingTrackingNumber,
+        shippingTrackingUrl,
+        markAsShipped: Boolean(markAsShipped),
+      });
+
+      if (!order) {
+        res.status(404).json({ error: 'Sipariş bulunamadı.' });
+        return;
+      }
+
+      res.status(200).json({ status: 'success', data: toAdminOrderJson(order as never) });
+    } catch (err: any) {
+      if (err instanceof StockError) {
+        res.status(422).json({ error: err.message, meta: err.meta });
+        return;
+      }
+      const is404 = err.message?.includes('bulunamadı');
+      const is400 = err.message?.includes('http://') || err.message?.includes('https://');
+      res.status(is404 ? 404 : is400 ? 400 : 500).json({
+        error: err.message ?? 'Kargo bilgileri kaydedilemedi.',
+      });
+    }
+  };
+
   updateStatus = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const id       = req.params.id;
@@ -118,7 +169,9 @@ export class OrderController {
         return;
       }
 
-      const order = await this.orderService.updateStatus(id, normalized, tenantId);
+      const order = await this.orderService.updateStatus(id, normalized, tenantId, {
+        notifyCustomer: true,
+      });
 
       // Auto-generate invoice when order is completed
       if (normalized === 'COMPLETED') {
@@ -154,7 +207,7 @@ export class OrderController {
         req,
       }).catch(() => {});
 
-      res.status(200).json({ status: 'success', data: order });
+      res.status(200).json({ status: 'success', data: toAdminOrderJson(order as never) });
     } catch (err: any) {
       if (err instanceof StockError) {
         res.status(422).json({ error: err.message, meta: err.meta });

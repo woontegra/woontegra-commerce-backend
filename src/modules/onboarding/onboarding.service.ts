@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { AppError } from '../../common/middleware/error.middleware';
 import { hashPassword, comparePassword } from '../../common/utils/password.util';
 import { generateToken } from '../../common/utils/jwt.util';
+import { syncTenantDomainsFromTenant } from '../../services/tenantDomainSync.service';
 
 const prisma = new PrismaClient();
 
@@ -37,6 +38,13 @@ export class OnboardingService {
         subdomain: data.subdomain.toLowerCase(),
         isActive: true
       }
+    });
+
+    await syncTenantDomainsFromTenant({
+      id: tenant.id,
+      subdomain:        tenant.subdomain,
+      customDomain:     tenant.customDomain,
+      domainVerified:   tenant.domainVerified,
     });
 
     // Create user (owner)

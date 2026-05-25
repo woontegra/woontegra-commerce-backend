@@ -94,11 +94,11 @@ export class AuthGuard {
   };
 
   static requireAdmin = () => {
-    return this.requireAuth({ roles: ['ADMIN'] });
+    return this.requireAuth({ roles: ['ADMIN', 'SUPER_ADMIN', 'OWNER'] });
   };
 
   static requireManager = () => {
-    return this.requireAuth({ roles: ['ADMIN', 'MANAGER'] });
+    return this.requireAuth({ roles: ['ADMIN', 'MANAGER', 'OWNER'] });
   };
 
   static requirePlanOrAbove = (plan: string) => {

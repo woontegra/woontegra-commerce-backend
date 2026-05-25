@@ -3,36 +3,74 @@ import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { createUnauthorizedError, createForbiddenError, AppError } from './AppError';
 import { logger } from '../../utils/logger';
+import { traceContextFromAuth } from './requestId';
+import { verifyToken as coreVerifyToken, type JwtPayload } from '../utils/jwt.util';
 
 const prisma = new PrismaClient();
 
-interface JWTPayload {
-  userId: string;
-  id?: string;       // alias for userId (set during authenticate)
-  tenantId: string;
-  role: string;
-  email: string;
-  iat?: number;
-  exp?: number;
+function resolveImpersonationAdminId(decoded: JwtPayload): string | undefined {
+  if (decoded.isImpersonation === true && decoded.adminId) return decoded.adminId;
+  if (decoded.impersonatedBy) return decoded.impersonatedBy;
+  return undefined;
 }
 
-interface AuthenticatedRequest extends Request {
+function isImpersonationToken(decoded: JwtPayload): boolean {
+  if (decoded.isImpersonation === true && !!decoded.adminId) return true;
+  return Boolean(decoded.impersonatedBy);
+}
+
+/** Only SUPER_ADMIN may issue / use impersonation tokens. */
+async function isValidImpersonationIssuer(adminId: string | undefined): Promise<boolean> {
+  if (!adminId) return true;
+  const adminUser = await prisma.user.findUnique({
+    where: { id: adminId },
+    select: { role: true, isActive: true },
+  });
+  const adminRole = String(adminUser?.role ?? '').toUpperCase();
+  return Boolean(adminUser?.isActive && adminRole === 'SUPER_ADMIN');
+}
+
+export type JWTPayload = JwtPayload & {
+  id?: string;
+  iat?: number;
+  exp?: number;
+};
+
+export interface ImpersonationContext {
+  adminUserId:    string;
+  adminEmail?:    string;
+}
+
+export interface AuthenticatedRequest extends Request {
   user?: JWTPayload;
+  impersonation?: ImpersonationContext;
+  /** True when JWT is a tenant impersonation session. */
+  isImpersonation?: boolean;
+  /** Admin user id from JWT (impersonation issuer). */
+  impersonationAdminId?: string;
   perms?: Set<string>;
   can?:   (key: string) => boolean;
 }
 
-// JWT token generation with short expiry (15 minutes)
-export const generateToken = (payload: Omit<JWTPayload, 'iat' | 'exp'>): string => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET environment variable is not set');
+/** Block mutating billing when acting as a tenant via impersonation. */
+export const forbidWhenImpersonating = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): void => {
+  if (req.isImpersonation) {
+    res.status(403).json({
+      success: false,
+      code:    'IMPERSONATION_FORBIDDEN',
+      message: 'Bu işlem taklit (impersonation) oturumunda yapılamaz.',
+    });
+    return;
   }
-
-  return jwt.sign(payload, secret, {
-    expiresIn: '7d',
-  });
+  next();
 };
+
+/** @deprecated Prefer `import { generateToken } from '../utils/jwt.util'` */
+export { generateToken } from '../utils/jwt.util';
 
 // Refresh token generation (longer expiry)
 export const generateRefreshToken = (userId: string): string => {
@@ -48,26 +86,9 @@ export const generateRefreshToken = (userId: string): string => {
   });
 };
 
-// Verify JWT token
+// Verify JWT token (core util maps all verify failures to AppError)
 export const verifyToken = (token: string): JWTPayload => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET environment variable is not set');
-  }
-
-  try {
-    const decoded = jwt.verify(token, secret) as JWTPayload;
-
-    return decoded;
-  } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      throw createUnauthorizedError('Token expired');
-    } else if (error instanceof jwt.JsonWebTokenError) {
-      throw createUnauthorizedError('Invalid token');
-    } else {
-      throw error;
-    }
-  }
+  return coreVerifyToken(token) as JWTPayload;
 };
 
 // Verify refresh token
@@ -81,14 +102,15 @@ export const verifyRefreshToken = (token: string): { userId: string } => {
     const decoded = jwt.verify(token, secret) as { userId: string };
 
     return decoded;
-  } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
+  } catch (error: unknown) {
+    const name = error instanceof Error ? error.name : '';
+    if (name === 'TokenExpiredError') {
       throw createUnauthorizedError('Refresh token expired');
-    } else if (error instanceof jwt.JsonWebTokenError) {
-      throw createUnauthorizedError('Invalid refresh token');
-    } else {
-      throw error;
     }
+    if (name === 'JsonWebTokenError' || name === 'NotBeforeError') {
+      throw createUnauthorizedError('Invalid refresh token');
+    }
+    throw createUnauthorizedError('Invalid refresh token');
   }
 };
 
@@ -108,24 +130,41 @@ export const authenticate = async (req: AuthenticatedRequest, res: Response, nex
     }
 
     const decoded = verifyToken(token);
-    
-    // Verify user exists and is active
+    const isImpersonation = isImpersonationToken(decoded);
+    const adminId       = resolveImpersonationAdminId(decoded);
+
     const user = await prisma.user.findUnique({
-      where: { 
-        id: decoded.userId,
-        isActive: true,
-        tenant: {
-          isActive: true,
-        }
-      },
-      include: {
-        tenant: true,
-      },
+      where: { id: decoded.userId, isActive: true },
+      include: { tenant: true },
     });
 
     if (!user) {
       throw createUnauthorizedError('User not found or inactive');
     }
+
+    if (!user.tenant) {
+      throw createUnauthorizedError('User not found or inactive');
+    }
+
+    if (!isImpersonation) {
+      if (!user.tenant.isActive) {
+        throw createUnauthorizedError('User not found or inactive');
+      }
+    } else {
+      if (!user.tenant.isActive) {
+        throw createForbiddenError('Askıdaki tenant için oturum açılamaz.');
+      }
+      if (!(await isValidImpersonationIssuer(adminId))) {
+        throw createForbiddenError('Geçersiz veya yetkisiz yönetici oturumu (impersonation).');
+      }
+      req.impersonation = {
+        adminUserId: adminId!,
+        adminEmail:  decoded.impersonatedByEmail ?? undefined,
+      };
+    }
+
+    req.isImpersonation       = isImpersonation;
+    req.impersonationAdminId = isImpersonation ? adminId : undefined;
 
     // Attach user to request
     req.user = {
@@ -134,7 +173,13 @@ export const authenticate = async (req: AuthenticatedRequest, res: Response, nex
       tenantId: user.tenantId,
       role: user.role,
       email: user.email,
+      isImpersonation:       decoded.isImpersonation,
+      adminId:               decoded.adminId ?? decoded.impersonatedBy,
+      impersonatedBy:        decoded.impersonatedBy ?? decoded.adminId,
+      impersonatedByEmail:   decoded.impersonatedByEmail,
     };
+
+    traceContextFromAuth(req);
 
     // Log authentication event
     logger.info({
@@ -167,6 +212,14 @@ export const authenticate = async (req: AuthenticatedRequest, res: Response, nex
         code: error.code,
       });
     }
+
+    logger.error({
+      message: 'Authentication error (unexpected)',
+      err: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      path: req.path,
+      method: req.method,
+    });
 
     return res.status(500).json({
       success: false,
@@ -272,29 +325,43 @@ export const optionalAuth = async (req: AuthenticatedRequest, res: Response, nex
     }
 
     const decoded = verifyToken(token);
-    
-    // Verify user exists and is active
+    const isImpersonation = isImpersonationToken(decoded);
+    const adminId       = resolveImpersonationAdminId(decoded);
+
     const user = await prisma.user.findUnique({
-      where: { 
-        id: decoded.userId,
-        isActive: true,
-        tenant: {
-          isActive: true,
-        }
-      },
-      include: {
-        tenant: true,
-      },
+      where: { id: decoded.userId, isActive: true },
+      include: { tenant: true },
     });
 
     if (user) {
+      if (!isImpersonation && !user.tenant.isActive) {
+        return next();
+      }
+      if (isImpersonation && !user.tenant.isActive) {
+        return next();
+      }
+      if (isImpersonation && !(await isValidImpersonationIssuer(adminId))) {
+        return next();
+      }
+      req.isImpersonation       = isImpersonation;
+      req.impersonationAdminId = isImpersonation ? adminId : undefined;
       req.user = {
         userId: user.id,
         id:     user.id,
         tenantId: user.tenantId,
         role: user.role,
         email: user.email,
+        isImpersonation:       decoded.isImpersonation,
+        adminId:               decoded.adminId ?? decoded.impersonatedBy,
+        impersonatedBy:        decoded.impersonatedBy ?? decoded.adminId,
+        impersonatedByEmail: decoded.impersonatedByEmail,
       };
+      if (isImpersonation) {
+        req.impersonation = {
+          adminUserId: adminId!,
+          adminEmail:  decoded.impersonatedByEmail ?? undefined,
+        };
+      }
     }
 
     next();
@@ -318,26 +385,27 @@ export const isOwner = (user: JWTPayload | undefined): boolean => {
 };
 
 export const isAdmin = (user: JWTPayload | undefined): boolean => {
-  return hasRole(user, 'ADMIN');
+  return hasAnyRole(user, ['ADMIN', 'SUPER_ADMIN', 'OWNER']);
 };
 
 export const isStaff = (user: JWTPayload | undefined): boolean => {
-  return hasAnyRole(user, ['ADMIN', 'MANAGER', 'STAFF']);
+  return hasAnyRole(user, ['ADMIN', 'SUPER_ADMIN', 'OWNER', 'MANAGER', 'STAFF']);
 };
 
-/** Middleware: only SUPER_ADMIN or ADMIN can proceed */
+/** Middleware: only SUPER_ADMIN, OWNER or ADMIN can proceed */
 export const requireSuperAdminOrAdmin = (
   req: AuthenticatedRequest, res: Response, next: NextFunction,
 ) => {
   const role = req.user?.role;
-  if (role === 'SUPER_ADMIN' || role === 'ADMIN') return next();
+  if (role === 'SUPER_ADMIN' || role === 'OWNER' || role === 'ADMIN') return next();
   return res.status(403).json({ success: false, message: 'Yetersiz yetki.' });
 };
 
-/** Middleware: only SUPER_ADMIN can proceed */
+/** Middleware: only SUPER_ADMIN (platform); OWNER excluded. */
 export const requireSuperAdmin = (
   req: AuthenticatedRequest, res: Response, next: NextFunction,
 ) => {
-  if (req.user?.role === 'SUPER_ADMIN') return next();
+  const r = String(req.user?.role || '').toUpperCase();
+  if (r === 'SUPER_ADMIN') return next();
   return res.status(403).json({ success: false, message: 'Yalnızca süper admin erişebilir.' });
 };

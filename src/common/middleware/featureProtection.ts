@@ -1,188 +1,141 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { createPlanLimitError, createSubscriptionError } from './AppError';
-import { logger } from '../../utils/logger';
+import prisma from '../../config/database';
+import { getPlanCountLimit, type PlanCountLimitKey } from '../../config/plans';
+import { getEffectivePlanForTenant } from '../../services/planQuota.service';
+import { logger } from '../../config/logger';
 
-const prisma = new PrismaClient();
-
-interface FeatureLimitConfig {
-  feature: string;
-  limit: number;
-  checkFunction: (userId: string, tenantId: string) => Promise<number>;
-  errorMessage?: string;
-}
-
-// Feature limit configurations
-export const featureLimits = {
-  products: {
-    feature: 'products',
-    limit: 20, // FREE plan limit
-    checkFunction: async (userId: string, tenantId: string) => {
-      const count = await prisma.product.count({
-        where: { tenantId },
-      });
-      return count;
-    },
-  },
-  orders: {
-    feature: 'orders',
-    limit: 50, // FREE plan limit
-    checkFunction: async (userId: string, tenantId: string) => {
-      const count = await prisma.order.count({
-        where: { tenantId },
-      });
-      return count;
-    },
-  },
-  customers: {
-    feature: 'customers',
-    limit: 100, // FREE plan limit
-    checkFunction: async (userId: string, tenantId: string) => {
-      const count = await prisma.customer.count({
-        where: { tenantId },
-      });
-      return count;
-    },
-  },
-  campaigns: {
-    feature: 'campaigns',
-    limit: 5, // FREE plan limit
-    checkFunction: async (userId: string, tenantId: string) => {
-      const count = await prisma.campaign.count({
-        where: { tenantId },
-      });
-      return count;
-    },
-  },
-  apiCalls: {
-    feature: 'api_calls',
-    limit: 1000, // FREE plan limit per day
-    checkFunction: async (userId: string, tenantId: string) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      const count = await prisma.log.count({
-        where: {
-          tenantId,
-          createdAt: {
-            gte: today,
-            lt: tomorrow,
-          },
-        },
-      });
-      return count;
-    },
-  },
+type LimitCheckConfig = {
+  limitKey: PlanCountLimitKey;
+  featureLabel: string;
+  countUsage: (tenantId: string) => Promise<number>;
 };
 
-// Generic feature limit middleware
-export const checkFeatureLimit = (config: FeatureLimitConfig) => {
+/**
+ * PLAN_CONFIG kotası — yeni kayıt oluşturmadan önce (POST).
+ * `currentUsage >= limit` ise 403.
+ */
+export function enforcePlanLimit(config: LimitCheckConfig) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).user;
-      
-      if (!user) {
+      if (!user?.tenantId) {
         return next();
       }
 
-      // Get user's current subscription
-      const activeSubscription = await prisma.subscription.findFirst({
-        where: { 
-          userId: user.userId,
-          status: 'ACTIVE' 
-        },
-      });
-      
-      if (!activeSubscription) {
+      const tenantId = String(user.tenantId);
+      const plan = await getEffectivePlanForTenant(tenantId);
+      const limit = getPlanCountLimit(plan, config.limitKey);
+
+      if (limit === -1) {
         return next();
       }
 
-      // Check current usage against configured limits
-      // Note: plan limits are now managed via PLAN_PRICING config
-      const currentUsage = await config.checkFunction(user.userId, user.tenantId);
-      
-      // TODO: Implement proper plan limit checking based on subscription plan
-      // For now, allow access if subscription is active
-      const planLimit = 1000; // Default limit, should come from plan config
+      const currentUsage = await config.countUsage(tenantId);
+
+      if (currentUsage >= limit) {
+        logger.warn({
+          message: 'Plan limit reached',
+          tenantId,
+          plan,
+          limitKey: config.limitKey,
+          currentUsage,
+          limit,
+          path: req.path,
+        });
+
+        return res.status(403).json({
+          success: false,
+          code: 'PLAN_LIMIT_REACHED',
+          error: 'PLAN_LIMIT_REACHED',
+          message: `${config.featureLabel} limitine ulaştınız. Mevcut planınız en fazla ${limit} kayda izin veriyor.`,
+          feature: config.limitKey,
+          current: currentUsage,
+          limit,
+          plan,
+        });
+      }
 
       return next();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       logger.error({
         message: 'Feature limit check failed',
-        error: err.message,
+        error: message,
         path: req.path,
         method: req.method,
-        timestamp: new Date().toISOString(),
       });
 
       return res.status(500).json({
         success: false,
-        message: 'Error checking feature limits',
+        message: 'Plan limiti kontrol edilemedi.',
         code: 'FEATURE_LIMIT_CHECK_ERROR',
       });
     }
   };
-};
+}
 
-// Specific feature limit middleware factories
-export const checkProductLimit = checkFeatureLimit(featureLimits.products);
-export const checkOrderLimit = checkFeatureLimit(featureLimits.orders);
-export const checkCustomerLimit = checkFeatureLimit(featureLimits.customers);
-export const checkCampaignLimit = checkFeatureLimit(featureLimits.campaigns);
-export const checkApiCallLimit = checkFeatureLimit(featureLimits.apiCalls);
+export const enforceProductLimit = enforcePlanLimit({
+  limitKey: 'maxProducts',
+  featureLabel: 'Ürün',
+  countUsage: tenantId => prisma.product.count({ where: { tenantId } }),
+});
 
-// Advanced abuse detection
+export const enforceOrderLimit = enforcePlanLimit({
+  limitKey: 'maxOrders',
+  featureLabel: 'Sipariş',
+  countUsage: tenantId => prisma.order.count({ where: { tenantId } }),
+});
+
+export const enforceCustomerLimit = enforcePlanLimit({
+  limitKey: 'maxCustomers',
+  featureLabel: 'Müşteri',
+  countUsage: tenantId => prisma.customer.count({ where: { tenantId } }),
+});
+
+// ── Advanced abuse detection ─────────────────────────────────────────────────
+
 export const detectAbuse = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
-  
+
   if (!user) {
     return next();
   }
 
-  // Check for suspicious patterns
   const suspiciousPatterns = [
-    // Rapid successive requests
     {
       name: 'rapid_requests',
-      check: (req: Request) => {
+      check: (r: Request) => {
         const now = Date.now();
-        const lastRequest = (req as any).lastRequestTime;
-        
-        if (lastRequest && (now - lastRequest) < 100) { // Less than 100ms between requests
+        const lastRequest = (r as any).lastRequestTime;
+
+        if (lastRequest && now - lastRequest < 100) {
           return true;
         }
-        
-        (req as any).lastRequestTime = now;
+
+        (r as any).lastRequestTime = now;
         return false;
       },
     },
-    
-    // Unusual user agent
     {
       name: 'suspicious_ua',
-      check: (req: Request) => {
-        const userAgent = req.get('User-Agent');
+      check: (r: Request) => {
+        const userAgent = r.get('User-Agent');
         const suspiciousAgents = ['bot', 'crawler', 'scraper', 'automated'];
-        
-        return userAgent && suspiciousAgents.some(agent => 
-          userAgent.toLowerCase().includes(agent)
+
+        return Boolean(
+          userAgent && suspiciousAgents.some(agent => userAgent.toLowerCase().includes(agent)),
         );
       },
     },
-    
-    // Request size anomaly
     {
       name: 'large_payload',
-      check: (req: Request) => {
-        const contentLength = req.get('content-length');
-        return contentLength && parseInt(contentLength) > 10 * 1024 * 1024; // 10MB
+      check: (r: Request) => {
+        const contentLength = r.get('content-length');
+        return Boolean(contentLength && parseInt(contentLength, 10) > 10 * 1024 * 1024);
       },
     },
   ];
 
-  // Check for suspicious patterns
   for (const pattern of suspiciousPatterns) {
     if (pattern.check(req)) {
       logger.warn({
@@ -193,7 +146,6 @@ export const detectAbuse = (req: Request, res: Response, next: NextFunction) => 
         method: req.method,
         ip: req.ip,
         userAgent: req.get('User-Agent'),
-        timestamp: new Date().toISOString(),
       });
 
       return res.status(429).json({
@@ -208,23 +160,21 @@ export const detectAbuse = (req: Request, res: Response, next: NextFunction) => 
   return next();
 };
 
-// Subscription status check
+// ── Subscription status check ───────────────────────────────────────────────
+
 export const checkSubscriptionStatus = async (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
-  
+
   if (!user) {
     return next();
   }
 
-  // Check if subscription is active
   try {
     const subscription = await prisma.subscription.findFirst({
       where: {
-        userId: user.userId,
+        tenantId: user.tenantId,
         status: 'ACTIVE',
-        endDate: {
-          gte: new Date(),
-        },
+        endDate: { gte: new Date() },
       },
     });
 
@@ -234,8 +184,6 @@ export const checkSubscriptionStatus = async (req: Request, res: Response, next:
         userId: user.userId,
         tenantId: user.tenantId,
         path: req.path,
-        method: req.method,
-        timestamp: new Date().toISOString(),
       });
 
       return res.status(403).json({
@@ -246,14 +194,9 @@ export const checkSubscriptionStatus = async (req: Request, res: Response, next:
     }
 
     return next();
-  } catch (err: any) {
-    logger.error({
-      message: 'Subscription check failed',
-      error: err.message,
-      userId: user.userId,
-      tenantId: user.tenantId,
-      timestamp: new Date().toISOString(),
-    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ message: 'Subscription check failed', error: message });
 
     return res.status(500).json({
       success: false,

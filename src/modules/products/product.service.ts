@@ -1,4 +1,8 @@
+import { TenantUsageAction } from '@prisma/client';
 import prisma from '../../config/database';
+import { checkProductLimit, invalidateTenantProductUsageCache } from '../../services/planQuota.service';
+import { logTenantUsage } from '../../services/tenantUsageLog.service';
+import { syncOnboardingCompletionForTenant } from '../../services/onboardingCompletion.service';
 import { generateUniqueProductSlug } from '../../common/utils/slug.utils';
 import { searchService, toProductDocument } from '../search/search.service';
 
@@ -121,6 +125,7 @@ export interface ProductListItem {
   isActive:        boolean;
   mainImage:       string | null;
   price:           number;
+  discountPrice:   number | null;
   stock:           number;
   variantCount:    number;
   category:        { id: string; name: string } | null;
@@ -227,7 +232,7 @@ export class ProductService {
 
           // Only salePrice from ProductPrice relation
           pricing: {
-            select: { salePrice: true },
+            select: { salePrice: true, discountPrice: true },
           },
 
           // Only quantity from Stock
@@ -268,6 +273,7 @@ export class ProductService {
       mainImage:      p.productImages[0]?.url ?? null,
       // salePrice takes precedence over legacy Product.price
       price:          Number(p.pricing?.salePrice ?? p.price ?? 0),
+      discountPrice:  p.pricing?.discountPrice != null ? Number(p.pricing.discountPrice) : null,
       stock:          Number(p.stock?.quantity ?? 0),
       variantCount:   p.variants.length,
       category:       p.category ?? null,
@@ -297,6 +303,8 @@ export class ProductService {
   // ─── Create ─────────────────────────────────────────────────────────────────
 
   async create(data: any, tenantId: string) {
+    await checkProductLimit(tenantId, 1);
+
     // Extract categoryId so we can use Prisma relation syntax instead of raw scalar
     const { pricing, shipping, stock, images: _images, categoryId, ...productData } = data;
 
@@ -341,6 +349,9 @@ export class ProductService {
     });
 
     searchService.upsertProduct(toProductDocument(product as any));
+    void invalidateTenantProductUsageCache(tenantId).catch(() => {});
+    logTenantUsage(tenantId, TenantUsageAction.PRODUCT_CREATE);
+    void syncOnboardingCompletionForTenant(tenantId).catch(() => {});
     return withDisplayNames(product);
   }
 
@@ -496,9 +507,49 @@ export class ProductService {
   // ─── Delete ─────────────────────────────────────────────────────────────────
 
   async delete(id: string, tenantId: string) {
+    const existing = await prisma.product.findFirst({
+      where:  { id, tenantId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new Error('Ürün bulunamadı veya bu mağazaya ait değil.');
+    }
+
     const result = await prisma.product.delete({ where: { id } });
-    searchService.deleteProduct(id);
+    void searchService.deleteProduct(id);
+    void invalidateTenantProductUsageCache(tenantId).catch(() => {});
     return result;
+  }
+
+  /** Toplu silme — tek istek, tenant doğrulamalı */
+  async bulkDelete(ids: string[], tenantId: string): Promise<{ deleted: number; notFound: number }> {
+    const uniqueIds = [...new Set(ids.map(id => String(id).trim()).filter(Boolean))];
+    if (uniqueIds.length === 0) {
+      throw new Error('Silinecek ürün seçilmedi.');
+    }
+    if (uniqueIds.length > 500) {
+      throw new Error('En fazla 500 ürün aynı anda silinebilir.');
+    }
+
+    const found = await prisma.product.findMany({
+      where:  { id: { in: uniqueIds }, tenantId },
+      select: { id: true },
+    });
+    const foundIds = found.map(p => p.id);
+    if (foundIds.length === 0) {
+      return { deleted: 0, notFound: uniqueIds.length };
+    }
+
+    await prisma.product.deleteMany({
+      where: { id: { in: foundIds }, tenantId },
+    });
+
+    for (const id of foundIds) {
+      void searchService.deleteProduct(id);
+    }
+    void invalidateTenantProductUsageCache(tenantId).catch(() => {});
+
+    return { deleted: foundIds.length, notFound: uniqueIds.length - foundIds.length };
   }
 
   // ─── Bulk re-index (admin / script) ─────────────────────────────────────────

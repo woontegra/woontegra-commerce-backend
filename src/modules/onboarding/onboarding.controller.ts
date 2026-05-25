@@ -1,9 +1,17 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AppError } from '../../common/middleware/error.middleware';
+import {
+  checkProductLimit,
+  invalidateTenantProductUsageCache,
+  PLAN_LIMIT_EXCEEDED,
+  PLAN_LIMIT_EXCEEDED_MESSAGE,
+} from '../../services/planQuota.service';
 import { generateToken } from '../../common/utils/jwt.util';
 import { hashPassword } from '../../common/utils/password.util';
 import { validateEmail, validateSubdomain } from '../../common/utils/validation.util';
+import { syncTenantDomainsFromTenant } from '../../services/tenantDomainSync.service';
+import { syncOnboardingCompletionForTenant } from '../../services/onboardingCompletion.service';
 
 const prisma = new PrismaClient();
 
@@ -85,6 +93,13 @@ export class OnboardingController {
           subdomain: subdomain.toLowerCase(),
           isActive: true
         }
+      });
+
+      await syncTenantDomainsFromTenant({
+        id:               tenant.id,
+        subdomain:        tenant.subdomain,
+        customDomain:     tenant.customDomain,
+        domainVerified:   tenant.domainVerified,
       });
 
       // Create user (owner)
@@ -343,6 +358,298 @@ export class OnboardingController {
       } else {
         res.status(500).json({ error: 'Registration failed' });
       }
+    }
+  }
+
+  // ─── NEW ONBOARDING WIZARD ENDPOINTS ─────────────────────────────────────────
+
+  /**
+   * STEP 1: Save theme selection
+   * POST /api/onboarding/theme
+   */
+  async saveTheme(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId, tenantId } = (req as any).user;
+      const { themePreset } = req.body;
+
+      if (!themePreset || !['modern', 'classic', 'minimal'].includes(themePreset)) {
+        res.status(400).json({ success: false, message: 'Geçersiz tema seçimi' });
+        return;
+      }
+
+      // Update tenant theme
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { themePreset }
+      });
+
+      // Update user onboarding step
+      await prisma.user.update({
+        where: { id: userId },
+        data: { onboardingStep: 1 }
+      });
+
+      res.json({
+        success: true,
+        message: 'Tema kaydedildi',
+        data: { themePreset }
+      });
+    } catch (error: any) {
+      console.error('Save theme error:', error);
+      res.status(500).json({ success: false, message: 'Tema kaydedilemedi', error: error.message });
+    }
+  }
+
+  /**
+   * STEP 2: Save store info
+   * POST /api/onboarding/store-info
+   */
+  async saveStoreInfo(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId, tenantId } = (req as any).user;
+      const { name, description, logoUrl, phase } = req.body as {
+        name: string;
+        description?: string;
+        logoUrl?: string;
+        /** 'name' = adım 1 (sadece isim), 'logo' = adım 2 (logo + opsiyonel açıklama) */
+        phase?: 'name' | 'logo';
+      };
+
+      if (!name || name.trim().length < 2) {
+        res.status(400).json({ success: false, message: 'Mağaza adı zorunludur' });
+        return;
+      }
+
+      const tenantPatch: Record<string, unknown> = { name: name.trim() };
+      if (phase !== 'name') {
+        tenantPatch.description = description?.trim() || null;
+        tenantPatch.logoUrl = logoUrl?.trim() || null;
+      }
+
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: tenantPatch as { name: string; description?: string | null; logoUrl?: string | null },
+      });
+
+      const nextStep = phase === 'logo' ? 2 : phase === 'name' ? 1 : 2;
+      await prisma.user.update({
+        where: { id: userId },
+        data: { onboardingStep: nextStep },
+      });
+
+      res.json({
+        success: true,
+        message: 'Mağaza bilgileri kaydedildi',
+        data: { name, description, logoUrl, onboardingStep: nextStep },
+      });
+    } catch (error: any) {
+      console.error('Save store info error:', error);
+      res.status(500).json({ success: false, message: 'Bilgiler kaydedilemedi', error: error.message });
+    }
+  }
+
+  /**
+   * STEP 3: Create first product
+   * POST /api/onboarding/product
+   */
+  async createFirstProduct(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId, tenantId } = (req as any).user;
+      const { name, price, stock, imageUrl, description } = req.body;
+
+      if (!name || !price || stock === undefined || stock === '') {
+        res.status(400).json({ success: false, message: 'Ürün adı, fiyat ve stok zorunludur' });
+        return;
+      }
+
+      const priceNum = typeof price === 'number' ? price : parseFloat(String(price));
+      const stockNum = typeof stock === 'number' ? stock : parseInt(String(stock), 10);
+
+      if (isNaN(priceNum) || priceNum <= 0) {
+        res.status(400).json({ success: false, message: 'Geçersiz fiyat' });
+        return;
+      }
+
+      if (isNaN(stockNum) || stockNum < 0) {
+        res.status(400).json({ success: false, message: 'Geçersiz stok' });
+        return;
+      }
+
+      const slugBase = name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'urun';
+      const slug = `${slugBase}-${Date.now().toString(36)}`;
+
+      try {
+        await checkProductLimit(tenantId, 1);
+      } catch (e: unknown) {
+        const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: string }).code) : '';
+        if (code === PLAN_LIMIT_EXCEEDED) {
+          res.status(403).json({
+            success: false,
+            error:   PLAN_LIMIT_EXCEEDED,
+            message: PLAN_LIMIT_EXCEEDED_MESSAGE,
+            code:    PLAN_LIMIT_EXCEEDED,
+          });
+          return;
+        }
+        throw e;
+      }
+
+      const product = await prisma.product.create({
+        data: {
+          name:        name.trim(),
+          slug,
+          description: typeof description === 'string' ? description.trim() || null : null,
+          price:       priceNum,
+          sku:         `ONB-${Date.now().toString(36)}`,
+          images:      imageUrl ? [String(imageUrl)] : [],
+          tenantId,
+          isActive:    true,
+        },
+      });
+
+      await prisma.stock.create({
+        data: {
+          productId: product.id,
+          tenantId,
+          quantity:  stockNum,
+        },
+      });
+
+      void invalidateTenantProductUsageCache(tenantId).catch(() => {});
+
+      await syncOnboardingCompletionForTenant(tenantId);
+
+      res.json({
+        success: true,
+        message: 'İlk ürün oluşturuldu',
+        data: product,
+      });
+    } catch (error: any) {
+      console.error('Create first product error:', error);
+      res.status(500).json({ success: false, message: 'Ürün oluşturulamadı', error: error.message });
+    }
+  }
+
+  /**
+   * STEP 4: Complete onboarding
+   * POST /api/onboarding/complete
+   */
+  async completeOnboardingWizard(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId, tenantId } = (req as any).user;
+
+      // Mark onboarding as completed
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          onboardingCompleted: true,
+          onboardingStep: 4
+        }
+      });
+
+      // Get updated tenant info
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { id: true, name: true, slug: true, subdomain: true, themePreset: true, logoUrl: true }
+      });
+
+      res.json({
+        success: true,
+        message: 'Onboarding tamamlandı',
+        data: {
+          completed: true,
+          tenant
+        }
+      });
+    } catch (error: any) {
+      console.error('Complete onboarding error:', error);
+      res.status(500).json({ success: false, message: 'Onboarding tamamlanamadı', error: error.message });
+    }
+  }
+
+  /**
+   * Get current onboarding status
+   * GET /api/onboarding/status
+   */
+  async getOnboardingWizardStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId, tenantId } = (req as any).user;
+
+      let user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { onboardingCompleted: true, onboardingStep: true },
+      });
+
+      let productCount = await prisma.product.count({ where: { tenantId } });
+
+      if (!user?.onboardingCompleted && productCount >= 1) {
+        await syncOnboardingCompletionForTenant(tenantId);
+        user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { onboardingCompleted: true, onboardingStep: true },
+        });
+      }
+
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { themePreset: true, name: true, logoUrl: true, description: true },
+      });
+
+      res.json({
+        success: true,
+        data: {
+          onboardingCompleted: user?.onboardingCompleted || false,
+          currentStep: user?.onboardingStep || 0,
+          themePreset: tenant?.themePreset || 'modern',
+          storeName: tenant?.name,
+          logoUrl: tenant?.logoUrl,
+          description: tenant?.description,
+          hasProducts: productCount > 0,
+        },
+      });
+    } catch (error: any) {
+      console.error('Get onboarding status error:', error);
+      res.status(500).json({ success: false, message: 'Durum alınamadı' });
+    }
+  }
+
+  /** POST /api/onboarding/dismiss — panele geç, ürün zorunlu değil */
+  async dismissOnboarding(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId } = (req as any).user;
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          onboardingCompleted: true,
+          onboardingStep:      4,
+        },
+      });
+      res.json({ success: true, message: 'Onboarding atlandı', data: { onboardingCompleted: true } });
+    } catch (error: any) {
+      console.error('Dismiss onboarding error:', error);
+      res.status(500).json({ success: false, message: 'İşlem başarısız', error: error.message });
+    }
+  }
+
+  /** POST /api/onboarding/reopen — kurulum ekranına dönmek için (isteğe bağlı) */
+  async reopenOnboarding(req: Request, res: Response): Promise<void> {
+    try {
+      const { userId } = (req as any).user;
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          onboardingCompleted: false,
+          onboardingStep:      0,
+        },
+      });
+      res.json({ success: true, message: 'Kurulum yeniden açıldı', data: { onboardingCompleted: false } });
+    } catch (error: any) {
+      console.error('Reopen onboarding error:', error);
+      res.status(500).json({ success: false, message: 'İşlem başarısız', error: error.message });
     }
   }
 }

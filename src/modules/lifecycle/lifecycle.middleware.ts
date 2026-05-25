@@ -41,8 +41,8 @@ export const tenantLifecycleGuard = async (
     return next();
   }
 
-  // Super admin bypasses all lifecycle checks
-  if (req.user.role === 'SUPER_ADMIN') {
+  // Super admin and owner bypass all lifecycle checks
+  if (req.user.role === 'SUPER_ADMIN' || req.user.role === 'OWNER') {
     return next();
   }
 
@@ -122,7 +122,7 @@ export const attachTenantLifecycle = async (
   res: Response,
   next: NextFunction,
 ) => {
-  if (!req.user || req.user.role === 'SUPER_ADMIN') return next();
+  if (!req.user || req.user.role === 'SUPER_ADMIN' || req.user.role === 'OWNER') return next();
 
   try {
     const tenant = await prisma.tenant.findUnique({

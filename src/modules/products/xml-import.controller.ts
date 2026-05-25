@@ -12,8 +12,15 @@ import { Response } from 'express';
 import { XMLParser } from 'fast-xml-parser';
 import { AuthRequest } from '../../common/middleware/auth.middleware';
 import prisma from '../../config/database';
+import {
+  createProductQuotaTracker,
+  getProductQuotaForTenant,
+  invalidateTenantProductUsageCache,
+} from '../../services/planQuota.service';
+import { syncOnboardingCompletionForTenant } from '../../services/onboardingCompletion.service';
 import { generateUniqueProductSlug, generateSEOSlug } from '../../common/utils/slug.utils';
 import { searchService, toProductDocument } from '../search/search.service';
+import { applyImportPricingRules } from '../pricing/pricing-rule.service';
 import https from 'https';
 import http from 'http';
 
@@ -32,98 +39,68 @@ export const xmlUploader = multer({
 
 // ─── Target field definitions ─────────────────────────────────────────────────
 
-export const TARGET_FIELDS: Array<{ key: string; label: string; required?: boolean }> = [
-  { key: 'name',          label: 'Ürün Adı',        required: true },
-  { key: 'price',         label: 'Satış Fiyatı',    required: true },
-  { key: 'category',      label: 'Kategori' },
+/** Basit modda öne çıkan 5 hedef alan */
+export const CORE_MAPPING_TARGET_KEYS = ['name', 'price', 'stock', 'imageUrl', 'category'] as const;
+
+export const TARGET_FIELDS: Array<{ key: string; label: string; required?: boolean; core?: boolean }> = [
+  { key: 'name',          label: 'Ürün Adı',        required: true, core: true },
+  { key: 'price',         label: 'Satış Fiyatı',    required: true, core: true },
+  { key: 'stock',         label: 'Stok Miktarı',    core: true },
+  { key: 'imageUrl',      label: 'Görsel URL',      core: true },
+  { key: 'category',      label: 'Kategori',        core: true },
   { key: 'barcode',       label: 'Barkod' },
   { key: 'sku',           label: 'SKU / Ürün Kodu' },
   { key: 'description',   label: 'Açıklama' },
   { key: 'brand',         label: 'Marka' },
-  { key: 'stock',         label: 'Stok Miktarı' },
   { key: 'discountPrice', label: 'İndirimli Fiyat' },
-  { key: 'imageUrl',      label: 'Görsel URL' },
   { key: 'unit',          label: 'Birim' },
   { key: '__ignore__',    label: '— Yoksay —' },
 ];
 
-// ─── Auto-suggest mapping ─────────────────────────────────────────────────────
+const BUILTIN_PRODUCT_FIELD_KEYS = new Set([
+  'name', 'price', 'category', 'barcode', 'sku', 'description', 'brand',
+  'stock', 'discountPrice', 'imageUrl', 'unit',
+]);
 
-// Normalized lookup: key is lowercased + only alphanumeric chars
-const SUGGEST_NORM: Record<string, string> = {
-  // name
-  productname: 'name', urunadi: 'name', title: 'name', baslik: 'name', name: 'name', ad: 'name',
-  // price (includes regularprice from _regular_price normalization)
-  price: 'price', saleprice: 'price', fiyat: 'price', satisfiyati: 'price',
-  sellprice: 'price', listprice: 'price', regularprice: 'price', normalprice: 'price',
-  // discountPrice
-  discountprice: 'discountPrice', discountedprice: 'discountPrice',
-  indirimlifiyat: 'discountPrice', kampanyafiyat: 'discountPrice',
-  // barcode
-  barcode: 'barcode', barkod: 'barcode', ean: 'barcode', gtin: 'barcode', upc: 'barcode',
-  // sku
-  sku: 'sku', code: 'sku', productcode: 'sku', urunkodu: 'sku', kod: 'sku',
-  stockcode: 'sku', postname: 'sku', wppostname: 'sku',
-  // description
-  description: 'description', desc: 'description', aciklama: 'description',
-  summary: 'description', ozet: 'description', tanim: 'description', icerik: 'description',
-  contentencoded: 'description',
-  // brand
-  brand: 'brand', marka: 'brand', manufacturer: 'brand', uretici: 'brand',
-  // stock
-  stock: 'stock', quantity: 'stock', qty: 'stock', stok: 'stock', miktar: 'stock',
-  stockqty: 'stock', stockquantity: 'stock',
-  // imageUrl
-  imageurl: 'imageUrl', image: 'imageUrl', photo: 'imageUrl', gorsel: 'imageUrl',
-  resim: 'imageUrl', thumbnail: 'imageUrl', imagelink: 'imageUrl', pictureurl: 'imageUrl',
-  // unit
-  unit: 'unit', birim: 'unit',
-  // category
-  category: 'category', kategori: 'category', categoryname: 'category',
-  productcategory: 'category', cat: 'category', productcat: 'category',
-};
-
-// Direct lookup for fields that have colons, underscores or other special chars
-const SUGGEST_DIRECT: Record<string, string> = {
-  // WordPress/WooCommerce standard XML child fields
-  'content:encoded':   'description', 'excerpt:encoded':    '__ignore__',
-  'wp:post_name':      'sku',         'wp:post_status':     '__ignore__',
-  'wp:post_type':      '__ignore__',  'wp:post_id':         '__ignore__',
-  'wp:post_date':      '__ignore__',  'wp:post_date_gmt':   '__ignore__',
-  'wp:comment_status': '__ignore__',  'wp:ping_status':     '__ignore__',
-  'wp:post_parent':    '__ignore__',  'wp:menu_order':      '__ignore__',
-  'wp:is_sticky':      '__ignore__',  'wp:status':          '__ignore__',
-  'dc:creator':        '__ignore__',  'pubDate':            '__ignore__',
-  'link':              '__ignore__',  'guid':               '__ignore__',
-  // WooCommerce postmeta fields (flattened from <wp:postmeta> key-value pairs)
-  '_price':            'price',       '_regular_price':     'price',
-  '_sale_price':       'discountPrice','_sku':              'sku',
-  '_stock':            'stock',       '_stock_quantity':    'stock',
-  '_manage_stock':     '__ignore__',  '_weight':            '__ignore__',
-  '_length':           '__ignore__',  '_width':             '__ignore__',
-  '_height':           '__ignore__',  '_virtual':           '__ignore__',
-  '_downloadable':     '__ignore__',  '_tax_status':        '__ignore__',
-  '_tax_class':        '__ignore__',  '_visibility':        '__ignore__',
-  // Injected image fields (resolved from WP attachments or nested elements)
-  '_image_url':        'imageUrl',   'image_url':          'imageUrl',
-  '_thumbnail_url':    'imageUrl',   'thumbnail_url':      'imageUrl',
-  'g:image_link':      'imageUrl',   'image_link':         'imageUrl',
-  // Category (WooCommerce / Google Shopping)
-  'g:google_product_category': 'category',
-  'g:product_type':            'category',
-};
-
-function suggestMapping(xmlFields: string[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const f of xmlFields) {
-    if (SUGGEST_DIRECT[f] !== undefined) {
-      map[f] = SUGGEST_DIRECT[f];
-    } else {
-      const norm = f.toLowerCase().replace(/[^a-z0-9]/g, '');
-      map[f] = SUGGEST_NORM[norm] ?? '__ignore__';
-    }
+export function parseCustomTargetLabels(raw: unknown): Record<string, string> {
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try { return parseCustomTargetLabels(JSON.parse(raw)); } catch { return {}; }
   }
-  return map;
+  if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof v === 'string' && v.trim()) out[k] = v.trim();
+    }
+    return out;
+  }
+  return {};
+}
+
+function resolveCustomFieldLabel(
+  targetKey: string,
+  labels?: Record<string, string>,
+): string {
+  if (labels?.[targetKey]) return labels[targetKey];
+  if (targetKey.startsWith('custom:')) {
+    return targetKey.slice(7).replace(/_/g, ' ');
+  }
+  return targetKey;
+}
+
+async function mergeCustomFieldsForProduct(
+  productId: string,
+  incoming: Record<string, string>,
+): Promise<Record<string, string>> {
+  const row = await prisma.product.findUnique({
+    where:  { id: productId },
+    select: { customFields: true },
+  });
+  const base =
+    row?.customFields && typeof row.customFields === 'object' && !Array.isArray(row.customFields)
+      ? { ...(row.customFields as Record<string, string>) }
+      : {};
+  return { ...base, ...incoming };
 }
 
 // ─── XML parse helpers ────────────────────────────────────────────────────────
@@ -165,6 +142,126 @@ function extractFirstUrl(val: any, depth = 0): string | null {
   }
   return null;
 }
+
+/** İç içe XML düğümlerinden metin (kategori, CDATA vb.) */
+function extractTextFromXmlValue(rawVal: any, depth = 0): string {
+  if (depth > 8 || rawVal == null) return '';
+  const v = unwrapXmlValue(rawVal);
+  if (v != null && typeof v !== 'object') {
+    const s = String(v).trim();
+    return s;
+  }
+  if (Array.isArray(rawVal)) {
+    const parts = rawVal.map(x => extractTextFromXmlValue(x, depth + 1)).filter(Boolean);
+    return parts.join(' > ');
+  }
+  if (rawVal && typeof rawVal === 'object') {
+    for (const key of ['#text', 'name', 'title', 'value', 'category', 'cat']) {
+      if (key in rawVal) {
+        const t = extractTextFromXmlValue((rawVal as Record<string, unknown>)[key], depth + 1);
+        if (t) return t;
+      }
+    }
+    const parts: string[] = [];
+    for (const val of Object.values(rawVal)) {
+      const t = extractTextFromXmlValue(val, depth + 1);
+      if (t) parts.push(t);
+    }
+    return parts.join(' > ');
+  }
+  return '';
+}
+
+/** WooCommerce RSS: <category domain="product_cat">…</category> */
+function extractWordPressProductCategories(item: any): string {
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  const addFrom = (raw: unknown) => {
+    const list = Array.isArray(raw) ? raw : raw != null && typeof raw === 'object' ? [raw] : [];
+    for (const c of list) {
+      if (!c || typeof c !== 'object') continue;
+      const o = c as Record<string, unknown>;
+      const domain = String(o['@_domain'] ?? o['@_nicename'] ?? '').toLowerCase();
+      if (domain && domain !== 'product_cat') {
+        if (domain === 'product_type' || domain === 'product_visibility') continue;
+      }
+      const text = extractTextFromXmlValue(c).trim();
+      if (text && !seen.has(text.toLowerCase())) {
+        seen.add(text.toLowerCase());
+        names.push(text);
+      }
+    }
+  };
+
+  addFrom(item?.category);
+  addFrom(item?.['wp:category']);
+
+  return names.join(' > ');
+}
+
+/** WooCommerce / eklenti gürültüsü — ürün eşleştirme listesine eklenmez */
+const POSTMETA_NOISE_PREFIXES = [
+  '_ahc', '_aioseo', '_yoast', '_elementor', '_oembed', '_edit_lock', '_edit_last',
+  '_wp_page_template', '_wp_old', '_ping', '_enclose', '_wc_facebook', '_monsterinsights',
+];
+
+function isPostMetaNoiseKey(key: string): boolean {
+  return POSTMETA_NOISE_PREFIXES.some(p => key.startsWith(p));
+}
+
+function shouldIncludePostMetaKey(key: string): boolean {
+  if (isPostMetaNoiseKey(key)) return false;
+  return true;
+}
+
+/** Düzleştirmede atlanır — kategori ayrı çıkarılır; postmeta ayrı işlenir */
+const DIRECT_FIELD_SKIP = new Set([
+  'wp:postmeta',
+  'category',
+  'wp:category',
+  'guid',
+  'pubDate',
+  'wp:post_date',
+  'wp:post_date_gmt',
+  'wp:post_modified',
+  'wp:post_modified_gmt',
+  'wp:comment_status',
+  'wp:ping_status',
+  'wp:menu_order',
+  'wp:post_password',
+  'wp:is_sticky',
+]);
+
+/** Eşleştirme ekranında gösterilen doğrudan RSS alanları */
+const WP_DIRECT_MAPPING_FIELDS = new Set([
+  'title',
+  'link',
+  'description',
+  'content:encoded',
+  'excerpt:encoded',
+  'dc:creator',
+  'wp:post_id',
+  'wp:post_name',
+  'wp:post_type',
+  'wp:status',
+  'wp:post_parent',
+  'category',
+  '_image_url',
+]);
+
+/** WooCommerce — feed’te yaygınsa veya en az bir üründe varsa listede */
+const WP_POSTMETA_CORE = new Set([
+  '_price', '_regular_price', '_sale_price', '_sku', '_stock', '_stock_status',
+  '_manage_stock', '_weight', '_length', '_width', '_height', '_thumbnail_id',
+  '_product_image_gallery', '_virtual', '_downloadable', '_tax_class', '_tax_status',
+  '_visibility', '_backorders', '_sold_individually', '_purchase_note', '_low_stock_amount',
+  'total_sales', '_wc_average_rating', '_wc_review_count', '_product_attributes',
+  '_default_attributes', '_product_version',
+]);
+
+/** Nadir postmeta: örneklemde bu oranın üstünde görünürse listelenir */
+const WP_POSTMETA_MIN_COVERAGE = 0.12;
 
 // Detect WordPress/WooCommerce RSS export and return product items
 // with _image_url injected from matched <wp:attachment_url> elements.
@@ -254,21 +351,30 @@ function extractWordPressItems(parsed: any): { items: any[]; isWordPress: boolea
 }
 
 // Flatten a WordPress/WooCommerce item:
-//  • copies all primitive direct fields (unwrapping { "#text":... } objects)
-//  • expands wp:postmeta key→value pairs into top-level fields (e.g. _price, _sku)
+//  • direct alanlar + kategori (iç içe XML)
+//  • yalnızca ürünle ilgili wp:postmeta (_price, _sku, …)
 function flattenWordPressItem(item: any): Record<string, string> {
   const flat: Record<string, string> = {};
 
   for (const [key, rawVal] of Object.entries(item)) {
-    if (key === 'wp:postmeta') continue;
+    if (DIRECT_FIELD_SKIP.has(key)) continue;
     if (key.startsWith('@_') || key === '#text') continue;
     const val = unwrapXmlValue(rawVal);
     if (typeof val !== 'object' || val === null) {
       flat[key] = val != null ? String(val) : '';
+    } else {
+      const text = extractTextFromXmlValue(rawVal);
+      if (text) flat[key] = text;
+      else {
+        const url = extractFirstUrl(rawVal);
+        if (url) flat[key] = url;
+      }
     }
   }
 
-  // Expand <wp:postmeta><wp:meta_key>_price</wp:meta_key><wp:meta_value>100</wp:meta_value></wp:postmeta>
+  const cat = extractWordPressProductCategories(item);
+  if (cat) flat.category = cat;
+
   const postmetaRaw = item['wp:postmeta'];
   const metas: any[] = Array.isArray(postmetaRaw)
     ? postmetaRaw
@@ -278,9 +384,10 @@ function flattenWordPressItem(item: any): Record<string, string> {
     if (!meta || typeof meta !== 'object') continue;
     const k = unwrapXmlValue(meta['wp:meta_key']);
     const v = unwrapXmlValue(meta['wp:meta_value']);
-    if (k && typeof k === 'string' && k.trim()) {
-      flat[k.trim()] = v != null ? String(v) : '';
-    }
+    if (!k || typeof k !== 'string' || !k.trim()) continue;
+    const key = k.trim();
+    if (!shouldIncludePostMetaKey(key)) continue;
+    flat[key] = v != null ? String(v) : '';
   }
 
   return flat;
@@ -324,24 +431,50 @@ function findLargestObjectArray(obj: any, depth = 0): any[] | null {
 
 // Flatten a standard XML node to a Record<string, string>.
 // For complex/nested values, tries to extract a URL (for image fields like <images><image>url</image></images>).
+const CATEGORY_XML_KEYS = new Set([
+  'category', 'categories', 'kategori', 'Kategori', 'Category',
+  'product_cat', 'product_category', 'productcategory',
+  'g:product_type', 'g:google_product_category', 'google_product_category',
+]);
+
 function flattenStandardNode(item: any): Record<string, string> {
   const flat: Record<string, string> = {};
   if (!item || typeof item !== 'object' || Array.isArray(item)) return flat;
+  const categoryParts: string[] = [];
+
   for (const [key, rawVal] of Object.entries(item)) {
     if (key.startsWith('@_') || key === '#text') continue;
     const val = unwrapXmlValue(rawVal);
+    const keyLower = key.toLowerCase();
+
+    if (CATEGORY_XML_KEYS.has(key) || keyLower.includes('categor') || keyLower.includes('kategori')) {
+      const text = extractTextFromXmlValue(rawVal);
+      if (text) categoryParts.push(text);
+      continue;
+    }
+
     if (typeof val !== 'object' || val === null) {
       flat[key] = val != null ? String(val) : '';
     } else {
-      // For complex nested values, try to extract an image URL (handles <images><image>url</image></images>)
-      const url = extractFirstUrl(rawVal);
-      if (url) flat[key] = url;
+      const text = extractTextFromXmlValue(rawVal);
+      if (text) flat[key] = text;
+      else {
+        const url = extractFirstUrl(rawVal);
+        if (url) flat[key] = url;
+      }
     }
   }
+
+  if (categoryParts.length > 0) {
+    const cat = categoryParts.join(' > ');
+    flat.category = cat;
+    if (!flat.product_cat) flat.product_cat = cat;
+  }
+
   return flat;
 }
 
-function parseXmlToNodes(buffer: Buffer): {
+export function parseXmlToNodes(buffer: Buffer): {
   nodes: Record<string, string>[];
   error?: string;
   xmlFormat: XmlFormat;
@@ -395,21 +528,88 @@ function parseXmlToNodes(buffer: Buffer): {
   };
 }
 
-// Collect fields that appear with non-empty values across sample nodes
-// Returns fields sorted by frequency (most common first)
-function collectXmlFields(nodes: Record<string, string>[]): string[] {
-  const counts = new Map<string, number>();
-  for (const node of nodes.slice(0, 100)) {
-    for (const [key, val] of Object.entries(node)) {
-      if (key.startsWith('@_') || key === '#text') continue;
-      if (String(val ?? '').trim()) {
-        counts.set(key, (counts.get(key) ?? 0) + 1);
+function isWordPressNode(node: Record<string, string>): boolean {
+  return (
+    'wp:post_type' in node ||
+    'content:encoded' in node ||
+    'wp:post_id' in node
+  );
+}
+
+/** Standart katalog XML: en zengin ürün satırı */
+function collectStandardMappingFields(nodes: Record<string, string>[]): string[] {
+  const sample = nodes.slice(0, Math.min(100, nodes.length));
+  let bestKeys: string[] = [];
+  let bestLen = 0;
+
+  for (const node of sample) {
+    const keys = Object.keys(node).filter(k => !k.startsWith('@_') && k !== '#text' && k !== 'product_cat');
+    if (keys.length > bestLen) {
+      bestLen = keys.length;
+      bestKeys = keys;
+    }
+  }
+
+  const fieldSet = new Set(bestKeys);
+  for (const must of ['category', 'title', 'name', 'price', 'sku']) {
+    for (const node of sample) {
+      if (must in node && String(node[must] ?? '').trim()) {
+        fieldSet.add(must);
+        break;
       }
     }
   }
-  return Array.from(counts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([key]) => key);
+
+  return Array.from(fieldSet).sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
+/**
+ * WooCommerce WXR: her postmeta ayrı sütun değil, feed’te gerçekten kullanılan alanlar.
+ * Tek üründeki 100+ eklenti meta’sı listeyi şişirmez.
+ */
+function collectWordPressMappingFields(nodes: Record<string, string>[]): string[] {
+  const sampleSize = Math.min(200, nodes.length);
+  const sample = nodes.slice(0, sampleSize);
+  const minHits = Math.max(2, Math.ceil(sampleSize * WP_POSTMETA_MIN_COVERAGE));
+
+  const hitCount = new Map<string, number>();
+  for (const node of sample) {
+    const seen = new Set<string>();
+    for (const [k, v] of Object.entries(node)) {
+      if (!v?.trim() || k.startsWith('@_') || k === '#text' || k === 'product_cat') continue;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      hitCount.set(k, (hitCount.get(k) ?? 0) + 1);
+    }
+  }
+
+  const fields = new Set<string>();
+  for (const [key, count] of hitCount) {
+    if (WP_DIRECT_MAPPING_FIELDS.has(key)) {
+      fields.add(key);
+      continue;
+    }
+    if (WP_POSTMETA_CORE.has(key)) {
+      fields.add(key);
+      continue;
+    }
+    if (key.startsWith('_') && count >= minHits) {
+      fields.add(key);
+    }
+  }
+
+  return Array.from(fields).sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
+export function collectXmlFields(
+  nodes: Record<string, string>[],
+  options?: { xmlFormat?: XmlFormat },
+): string[] {
+  if (nodes.length === 0) return [];
+  const fmt = options?.xmlFormat ?? (isWordPressNode(nodes[0]) ? 'wordpress' : 'standard');
+  return fmt === 'wordpress'
+    ? collectWordPressMappingFields(nodes)
+    : collectStandardMappingFields(nodes);
 }
 
 function nodeToRow(node: Record<string, string>, fields: string[]): Record<string, string> {
@@ -422,7 +622,7 @@ function nodeToRow(node: Record<string, string>, fields: string[]): Record<strin
 
 // ─── Row → product data ────────────────────────────────────────────────────────
 
-interface MappedProduct {
+export interface MappedProduct {
   name?:          string;
   price?:         number;
   category?:      string;
@@ -434,13 +634,16 @@ interface MappedProduct {
   discountPrice?: number;
   imageUrl?:      string;
   unit?:          string;
+  customFields?:  Record<string, string>;
 }
 
-function applyMapping(
+export function applyMapping(
   node: Record<string, string>,
   mapping: Record<string, string>,
+  customTargetLabels?: Record<string, string>,
 ): MappedProduct {
   const result: Record<string, any> = {};
+  const customFields: Record<string, string> = {};
 
   for (const [xmlField, targetField] of Object.entries(mapping)) {
     if (targetField === '__ignore__') continue;
@@ -448,13 +651,24 @@ function applyMapping(
     if (raw == null || String(raw).trim() === '') continue;
     const str = String(raw).trim();
 
+    if (targetField.startsWith('custom:')) {
+      const label = resolveCustomFieldLabel(targetField, customTargetLabels);
+      customFields[label] = str;
+      continue;
+    }
+
+    if (!BUILTIN_PRODUCT_FIELD_KEYS.has(targetField)) continue;
+
     if (['price', 'discountPrice', 'stock'].includes(targetField)) {
-      // Handle comma as decimal separator (European format)
       const n = parseFloat(str.replace(/[^\d.,]/g, '').replace(',', '.'));
       if (!isNaN(n) && n >= 0) result[targetField] = n;
     } else {
       result[targetField] = str;
     }
+  }
+
+  if (Object.keys(customFields).length > 0) {
+    result.customFields = customFields;
   }
 
   return result as MappedProduct;
@@ -464,7 +678,7 @@ function applyMapping(
 
 interface ValidationError { field: string; message: string }
 
-function validateRow(data: MappedProduct, rowIndex: number): ValidationError[] {
+export function validateRow(data: MappedProduct, rowIndex: number): ValidationError[] {
   const errors: ValidationError[] = [];
 
   if (!data.name || data.name.trim().length < 1) {
@@ -494,19 +708,136 @@ function validateRow(data: MappedProduct, rowIndex: number): ValidationError[] {
   return errors;
 }
 
+// ─── Otomatik alan tahmini (kayıtlı kaynak önizlemesi / yeni XML alanları) ───
+
+const SUGGEST_NORM: Record<string, string> = {
+  productname: 'name', urunadi: 'name', title: 'name', baslik: 'name', name: 'name', ad: 'name',
+  price: 'price', saleprice: 'price', fiyat: 'price', satisfiyati: 'price',
+  sellprice: 'price', listprice: 'price', regularprice: 'price', normalprice: 'price',
+  discountprice: 'discountPrice', discountedprice: 'discountPrice',
+  indirimlifiyat: 'discountPrice', kampanyafiyat: 'discountPrice',
+  barcode: 'barcode', barkod: 'barcode', ean: 'barcode', gtin: 'barcode', upc: 'barcode',
+  sku: 'sku', code: 'sku', productcode: 'sku', urunkodu: 'sku', kod: 'sku',
+  stockcode: 'sku', postname: 'sku', wppostname: 'sku',
+  description: 'description', desc: 'description', aciklama: 'description',
+  summary: 'description', ozet: 'description', tanim: 'description', icerik: 'description',
+  contentencoded: 'description',
+  brand: 'brand', marka: 'brand', manufacturer: 'brand', uretici: 'brand',
+  stock: 'stock', quantity: 'stock', qty: 'stock', stok: 'stock', miktar: 'stock',
+  stockqty: 'stock', stockquantity: 'stock',
+  imageurl: 'imageUrl', image: 'imageUrl', photo: 'imageUrl', gorsel: 'imageUrl',
+  resim: 'imageUrl', thumbnail: 'imageUrl', imagelink: 'imageUrl', pictureurl: 'imageUrl',
+  unit: 'unit', birim: 'unit',
+  category: 'category', kategori: 'category', categoryname: 'category',
+  productcategory: 'category', cat: 'category', productcat: 'category',
+};
+
+const SUGGEST_DIRECT: Record<string, string> = {
+  'content:encoded': 'description',
+  'wp:post_name': 'sku',
+  '_price': 'price', '_regular_price': 'price', '_sale_price': 'discountPrice',
+  '_sku': 'sku', '_stock': 'stock', '_stock_quantity': 'stock',
+  '_image_url': 'imageUrl', 'image_url': 'imageUrl', '_thumbnail_url': 'imageUrl',
+  'thumbnail_url': 'imageUrl', 'g:image_link': 'imageUrl', 'image_link': 'imageUrl',
+  'g:google_product_category': 'category', 'g:product_type': 'category', 'product_cat': 'category',
+};
+
+function guessTargetForXmlField(xmlField: string): string | null {
+  if (SUGGEST_DIRECT[xmlField] !== undefined) {
+    const t = SUGGEST_DIRECT[xmlField];
+    return t === '__ignore__' ? null : t;
+  }
+  const norm = xmlField.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const t = SUGGEST_NORM[norm];
+  return t && t !== '__ignore__' ? t : null;
+}
+
+// ─── Shared preview builder (dosya / URL / kayıtlı kaynak) ─────────────────────
+
+/** Kayıtlı eşleştirme öncelikli; yoksa otomatik tahmin; kalan yoksay. */
+export function buildFieldMapping(
+  xmlFields: string[],
+  stored?: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const usedTargets = new Set<string>();
+
+  for (const f of xmlFields) {
+    const storedVal = stored?.[f];
+    if (storedVal != null && String(storedVal).trim() !== '' && storedVal !== '__ignore__') {
+      const t = String(storedVal).trim();
+      out[f] = t;
+      usedTargets.add(t);
+      continue;
+    }
+    const target = guessTargetForXmlField(f);
+    if (target && !usedTargets.has(target)) {
+      out[f] = target;
+      usedTargets.add(target);
+    } else {
+      out[f] = '__ignore__';
+    }
+  }
+  return out;
+}
+
+export async function buildXmlUrlPreview(
+  tenantId: string,
+  buffer: Buffer,
+  opts: { filename: string; sourceUrl?: string },
+  storedFieldMapping?: Record<string, string>,
+) {
+  const { nodes, error, xmlFormat } = parseXmlToNodes(buffer);
+  if (error) throw new Error(error);
+  if (nodes.length === 0) throw new Error('XML içinde ürün bulunamadı.');
+
+  const xmlFields        = collectXmlFields(nodes, { xmlFormat });
+  const sampleRows       = nodes.slice(0, 5).map(n => nodeToRow(n, xmlFields));
+  const mapping          = buildFieldMapping(xmlFields, storedFieldMapping);
+  const productQuota     = await getProductQuotaForTenant(tenantId);
+  const remainingSlots   = productQuota.unlimited
+    ? null
+    : Math.max(0, productQuota.max - productQuota.current);
+
+  return {
+    totalRows:        nodes.length,
+    xmlFields,
+    sampleRows,
+    mapping,
+    targetFields:     TARGET_FIELDS,
+    coreTargetKeys:   [...CORE_MAPPING_TARGET_KEYS],
+    filename:         opts.filename,
+    fileSizeBytes:    buffer.length,
+    sourceUrl:        opts.sourceUrl,
+    xmlFormat,
+    productQuota: {
+      plan:           productQuota.plan,
+      current:        productQuota.current,
+      max:            productQuota.max,
+      unlimited:      productQuota.unlimited,
+      remainingSlots,
+      usagePercent:   productQuota.usagePercent,
+    },
+  };
+}
+
 // ─── Preview endpoint ─────────────────────────────────────────────────────────
 
 export const previewXml = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.file) { res.status(400).json({ error: 'XML dosyası yüklenmedi.' }); return; }
 
+    const tenantId = req.user!.tenantId!;
     const { nodes, error, xmlFormat } = parseXmlToNodes(req.file.buffer);
     if (error) { res.status(400).json({ error }); return; }
     if (nodes.length === 0) { res.status(400).json({ error: 'XML içinde ürün bulunamadı.' }); return; }
 
-    const xmlFields        = collectXmlFields(nodes);
+    const xmlFields        = collectXmlFields(nodes, { xmlFormat });
     const sampleRows       = nodes.slice(0, 5).map(n => nodeToRow(n, xmlFields));
-    const suggestedMapping = suggestMapping(xmlFields);
+    const productQuota     = await getProductQuotaForTenant(tenantId);
+    const remainingSlots   = productQuota.unlimited
+      ? null
+      : Math.max(0, productQuota.max - productQuota.current);
 
     res.json({
       status: 'success',
@@ -514,11 +845,19 @@ export const previewXml = async (req: AuthRequest, res: Response): Promise<void>
         totalRows:        nodes.length,
         xmlFields,
         sampleRows,
-        suggestedMapping,
         targetFields:     TARGET_FIELDS,
+        coreTargetKeys:   [...CORE_MAPPING_TARGET_KEYS],
         filename:         req.file.originalname,
         fileSizeBytes:    req.file.size,
         xmlFormat,
+        productQuota: {
+          plan:           productQuota.plan,
+          current:        productQuota.current,
+          max:            productQuota.max,
+          unlimited:      productQuota.unlimited,
+          remainingSlots,
+          usagePercent:   productQuota.usagePercent,
+        },
       },
     });
   } catch (err: any) {
@@ -529,6 +868,9 @@ export const previewXml = async (req: AuthRequest, res: Response): Promise<void>
 // ─── Import endpoint ──────────────────────────────────────────────────────────
 
 export type DuplicateMode = 'skip' | 'update' | 'error';
+
+/** XML ile gelen yeni ürünler doğrudan satışa hazır (taslak değil). */
+const XML_IMPORT_NEW_PRODUCT = { status: 'active' as const, isActive: true };
 
 export interface ImportRowResult {
   row:        number;
@@ -549,10 +891,12 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
     // ── Parse mapping + options from request body ──────────────────────────
     let mapping: Record<string, string> = {};
     let duplicateMode: DuplicateMode = 'skip';
+    let customTargetLabels: Record<string, string> = {};
 
     try {
-      if (req.body.mapping)       mapping       = JSON.parse(req.body.mapping);
-      if (req.body.duplicateMode) duplicateMode = req.body.duplicateMode as DuplicateMode;
+      if (req.body.mapping)             mapping             = JSON.parse(req.body.mapping);
+      if (req.body.duplicateMode)       duplicateMode       = req.body.duplicateMode as DuplicateMode;
+      if (req.body.customTargetLabels)  customTargetLabels  = parseCustomTargetLabels(req.body.customTargetLabels);
     } catch {
       res.status(400).json({ error: 'Geçersiz mapping JSON formatı.' });
       return;
@@ -580,14 +924,23 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
     const existingByBarcode = new Map<string, { id: string; name: string }>();
     const existingBySku     = new Map<string, { id: string; name: string }>();
 
+    // NOTE: "SKU varsa update" için SKU'lu ama barkodsuz ürünleri de preload etmeliyiz.
     const existingProducts = await prisma.product.findMany({
-      where:  { tenantId, barcode: { not: null } },
+      where: {
+        tenantId,
+        OR: [
+          { barcode: { not: null } },
+          { sku:     { not: null } },
+        ],
+      },
       select: { id: true, name: true, barcode: true, sku: true },
     });
     for (const p of existingProducts) {
       if (p.barcode) existingByBarcode.set(p.barcode.trim().toLowerCase(), { id: p.id, name: p.name });
       if (p.sku)     existingBySku.set(p.sku.trim().toLowerCase(),     { id: p.id, name: p.name });
     }
+
+    const productQuota = await createProductQuotaTracker(tenantId);
 
     // ── Process rows ───────────────────────────────────────────────────────
     const results:     ImportRowResult[] = [];
@@ -599,7 +952,8 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
     for (let i = 0; i < nodes.length; i++) {
       const row    = i + 1;
       const node   = nodes[i];
-      const data   = applyMapping(node, mapping);
+      const data   = applyMapping(node, mapping, customTargetLabels);
+      await applyImportPricingRules(tenantId, data);
       const errors = validateRow(data, row);
 
       if (errors.length > 0) {
@@ -618,9 +972,10 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
       const barcodeKey  = data.barcode ? data.barcode.trim().toLowerCase() : null;
       const skuKey      = data.sku     ? data.sku.trim().toLowerCase()     : null;
 
+      // Prefer SKU match over barcode per "SKU varsa → update" rule.
       const existing =
-        (barcodeKey && existingByBarcode.get(barcodeKey)) ||
         (skuKey     && existingBySku.get(skuKey))         ||
+        (barcodeKey && existingByBarcode.get(barcodeKey)) ||
         null;
 
       if (existing) {
@@ -658,6 +1013,9 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
             ...(data.description   ? { description: data.description }   : {}),
             ...(data.brand         ? { brand:       data.brand }         : {}),
             ...(data.unit          ? { unit:        data.unit }          : {}),
+            ...(data.customFields && Object.keys(data.customFields).length > 0
+              ? { customFields: await mergeCustomFieldsForProduct(existing.id, data.customFields) }
+              : {}),
           };
 
           await prisma.product.update({
@@ -709,6 +1067,19 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
 
       // ── Create new product ───────────────────────────────────────────────
       try {
+        if (!productQuota.canCreate()) {
+          productQuota.recordPlanLimitSkip();
+          results.push({
+            row,
+            name:    data.name!,
+            barcode: data.barcode ?? '',
+            status:  'skipped',
+            errors:  ['Plan ürün kotası doldu; satır atlandı.'],
+          });
+          skippedCnt++;
+          continue;
+        }
+
         const slug = await generateUniqueProductSlug(data.name!, tenantId);
 
         const created = await prisma.product.create({
@@ -721,8 +1092,10 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
             description: data.description ?? null,
             brand:       data.brand       ?? null,
             unit:        data.unit        ?? 'adet',
-            status:      'draft',
-            isActive:    false,
+            ...(data.customFields && Object.keys(data.customFields).length > 0
+              ? { customFields: data.customFields }
+              : {}),
+            ...XML_IMPORT_NEW_PRODUCT,
             hasVariants: false,
             tenant:      { connect: { id: tenantId } },
             pricing: {
@@ -735,6 +1108,8 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
             },
           },
         });
+
+        productQuota.recordCreated();
 
         if (data.stock != null) {
           await prisma.stock.create({
@@ -768,12 +1143,15 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
     }
 
     // ── Save ImportLog ─────────────────────────────────────────────────────
+    const skippedPlanLimit = productQuota.getSkippedPlanLimit();
     const summary = {
-      total:    nodes.length,
-      imported: importedCnt,
-      updated:  updatedCnt,
-      skipped:  skippedCnt,
-      failed:   failedCnt,
+      total:             nodes.length,
+      imported:          importedCnt,
+      updated:           updatedCnt,
+      skipped:           skippedCnt,
+      skippedPlanLimit,
+      failed:            failedCnt,
+      ...(skippedPlanLimit > 0 ? { reason: 'PLAN_LIMIT' as const } : {}),
     };
 
     try {
@@ -794,6 +1172,9 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
       });
     } catch { /* ImportLog failure is non-blocking */ }
 
+    void invalidateTenantProductUsageCache(tenantId).catch(() => {});
+    void syncOnboardingCompletionForTenant(tenantId).catch(() => {});
+
     res.json({
       status:  'success',
       summary,
@@ -808,7 +1189,7 @@ export const importXml = async (req: AuthRequest, res: Response): Promise<void> 
 
 const MAX_URL_BYTES = 30 * 1024 * 1024; // 30 MB
 
-function fetchUrlAsBuffer(rawUrl: string): Promise<Buffer> {
+export function fetchUrlAsBuffer(rawUrl: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     // Basic validation
     let parsed: URL;
@@ -841,6 +1222,224 @@ function fetchUrlAsBuffer(rawUrl: string): Promise<Buffer> {
   });
 }
 
+/** URL’den indirilmiş XML buffer’ı — kayıtlı feed senkronu ve import-from-url ortak işler. */
+export interface XmlUrlImportPipelineParams {
+  tenantId:             string;
+  userId:               string;
+  buffer:               Buffer;
+  mapping:              Record<string, string>;
+  customTargetLabels?:  Record<string, string>;
+  duplicateMode:        DuplicateMode;
+  skipZeroStock:        boolean;
+  startedAt:            Date;
+  logFilename:          string;
+}
+
+export interface XmlUrlImportPipelineResult {
+  summary: {
+    total:             number;
+    imported:          number;
+    updated:           number;
+    skipped:           number;
+    skippedPlanLimit:  number;
+    failed:            number;
+    reason?:           'PLAN_LIMIT';
+  };
+  results: ImportRowResult[];
+}
+
+export async function runXmlUrlImportPipeline(
+  params: XmlUrlImportPipelineParams,
+): Promise<XmlUrlImportPipelineResult> {
+  const {
+    tenantId, userId, buffer, mapping, customTargetLabels = {}, duplicateMode, skipZeroStock, startedAt, logFilename,
+  } = params;
+
+  const { nodes, error } = parseXmlToNodes(buffer);
+  if (error) {
+    throw new Error(error);
+  }
+  if (nodes.length === 0) {
+    throw new Error('XML içinde ürün bulunamadı.');
+  }
+
+  const existingByBarcode = new Map<string, { id: string; name: string }>();
+  const existingBySku     = new Map<string, { id: string; name: string }>();
+  // NOTE: SKU upsert için barkodsuz SKU'lu ürünleri de preload et
+  const existingProducts  = await prisma.product.findMany({
+    where: {
+      tenantId,
+      OR: [
+        { barcode: { not: null } },
+        { sku:     { not: null } },
+      ],
+    },
+    select: { id: true, name: true, barcode: true, sku: true },
+  });
+  for (const p of existingProducts) {
+    if (p.barcode) existingByBarcode.set(p.barcode.trim().toLowerCase(), { id: p.id, name: p.name });
+    if (p.sku)     existingBySku.set(p.sku.trim().toLowerCase(),         { id: p.id, name: p.name });
+  }
+
+  const productQuotaUrl = await createProductQuotaTracker(tenantId);
+
+  const results:    ImportRowResult[] = [];
+  let importedCnt  = 0, updatedCnt = 0, skippedCnt = 0, failedCnt = 0;
+
+  for (let i = 0; i < nodes.length; i++) {
+    const row    = i + 1;
+    const node   = nodes[i];
+    const data   = applyMapping(node, mapping, customTargetLabels);
+    await applyImportPricingRules(tenantId, data);
+    const errors = validateRow(data, row);
+
+    if (errors.length > 0) {
+      results.push({ row, name: data.name ?? '—', barcode: data.barcode ?? '', status: 'error', errors: errors.map(e => `${e.field}: ${e.message}`) });
+      failedCnt++; continue;
+    }
+
+    if (skipZeroStock && data.stock != null && data.stock === 0) {
+      results.push({ row, name: data.name ?? '—', barcode: data.barcode ?? '', status: 'skipped', errors: ['Stok miktarı 0 olduğu için atlandı'] });
+      skippedCnt++;
+      continue;
+    }
+
+    const barcodeKey = data.barcode ? data.barcode.trim().toLowerCase() : null;
+    const skuKey     = data.sku     ? data.sku.trim().toLowerCase()     : null;
+    // Prefer SKU match over barcode per "SKU varsa → update" rule.
+    const existing   = (skuKey && existingBySku.get(skuKey)) || (barcodeKey && existingByBarcode.get(barcodeKey)) || null;
+
+    if (existing) {
+      if (duplicateMode === 'error') {
+        results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'error', errors: [`Mevcut ürün ile çakışma: "${existing.name}"`] });
+        failedCnt++; continue;
+      }
+      if (duplicateMode === 'skip') {
+        results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'skipped', errors: [`Atlandı: "${existing.name}" ile çakışma`] });
+        skippedCnt++; continue;
+      }
+      try {
+        await prisma.product.update({
+          where: { id: existing.id },
+          data: {
+            name: data.name!, price: data.price!,
+            ...(data.barcode     ? { barcode: data.barcode }         : {}),
+            ...(data.sku         ? { sku: data.sku }                 : {}),
+            ...(data.description ? { description: data.description } : {}),
+            ...(data.brand       ? { brand: data.brand }             : {}),
+            ...(data.unit        ? { unit: data.unit }               : {}),
+            ...(data.customFields && Object.keys(data.customFields).length > 0
+              ? { customFields: await mergeCustomFieldsForProduct(existing.id, data.customFields) }
+              : {}),
+          },
+        });
+        await prisma.productPrice.upsert({
+          where:  { productId: existing.id },
+          create: { productId: existing.id, salePrice: data.price!, discountPrice: data.discountPrice ?? null, vatRate: 18, currency: 'TRY' },
+          update: { salePrice: data.price!, ...(data.discountPrice != null ? { discountPrice: data.discountPrice } : {}) },
+        });
+        if (data.stock != null) {
+          await prisma.stock.upsert({
+            where:  { productId: existing.id },
+            create: { productId: existing.id, tenantId, quantity: data.stock, unit: data.unit ?? 'adet' },
+            update: { quantity: data.stock },
+          });
+        }
+        if (data.imageUrl) {
+          const existingImg = await prisma.productImage.findFirst({ where: { productId: existing.id, isMain: true } });
+          if (existingImg) {
+            await prisma.productImage.update({ where: { id: existingImg.id }, data: { url: data.imageUrl } });
+          } else {
+            await prisma.productImage.create({ data: { productId: existing.id, url: data.imageUrl, isMain: true, alt: data.name ?? '', order: 0 } });
+          }
+        }
+        if (barcodeKey) existingByBarcode.set(barcodeKey, { id: existing.id, name: data.name! });
+        results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'updated' });
+        updatedCnt++;
+      } catch (e: any) {
+        results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'error', errors: [e.message] });
+        failedCnt++;
+      }
+      continue;
+    }
+
+    try {
+      if (!productQuotaUrl.canCreate()) {
+        productQuotaUrl.recordPlanLimitSkip();
+        results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'skipped', errors: ['Plan ürün kotası doldu; satır atlandı.'] });
+        skippedCnt++;
+        continue;
+      }
+      const slug    = await generateUniqueProductSlug(data.name!, tenantId);
+      const created = await prisma.product.create({
+        data: {
+          name: data.name!, slug, price: data.price!,
+          barcode: data.barcode ?? null, sku: data.sku ?? null,
+          description: data.description ?? null, brand: data.brand ?? null,
+          unit: data.unit ?? 'adet',
+          ...(data.customFields && Object.keys(data.customFields).length > 0
+            ? { customFields: data.customFields }
+            : {}),
+          ...XML_IMPORT_NEW_PRODUCT,
+          hasVariants: false,
+          tenant:  { connect: { id: tenantId } },
+          pricing: { create: { salePrice: data.price!, discountPrice: data.discountPrice ?? null, vatRate: 18, currency: 'TRY' } },
+        },
+      });
+      productQuotaUrl.recordCreated();
+      if (data.stock != null) {
+        await prisma.stock.create({ data: { productId: created.id, tenantId, quantity: data.stock, unit: data.unit ?? 'adet' } });
+      }
+      if (data.imageUrl) {
+        await prisma.productImage.create({
+          data: { productId: created.id, url: data.imageUrl, isMain: true, alt: data.name ?? '', order: 0 },
+        }).catch(() => {});
+      }
+      if (barcodeKey) existingByBarcode.set(barcodeKey, { id: created.id, name: created.name });
+      if (skuKey)     existingBySku.set(skuKey,         { id: created.id, name: created.name });
+      results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'imported' });
+      importedCnt++;
+    } catch (e: any) {
+      results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'error', errors: [e.message] });
+      failedCnt++;
+    }
+  }
+
+  const skippedPlanLimitUrl = productQuotaUrl.getSkippedPlanLimit();
+  const summary = {
+    total:             nodes.length,
+    imported:          importedCnt,
+    updated:           updatedCnt,
+    skipped:           skippedCnt,
+    skippedPlanLimit:  skippedPlanLimitUrl,
+    failed:            failedCnt,
+    ...(skippedPlanLimitUrl > 0 ? { reason: 'PLAN_LIMIT' as const } : {}),
+  };
+
+  try {
+    await prisma.importLog.create({
+      data: {
+        filename:    logFilename,
+        type:        'XML',
+        status:      failedCnt === nodes.length ? 'failed' : failedCnt > 0 ? 'partial' : 'success',
+        totalRows:   nodes.length,
+        successRows: importedCnt + updatedCnt,
+        failedRows:  failedCnt,
+        errors:      results.filter(r => r.status === 'error').slice(0, 200) as any,
+        startedAt,
+        completedAt: new Date(),
+        createdBy:   userId,
+        tenant:      { connect: { id: tenantId } },
+      },
+    });
+  } catch { /* non-blocking */ }
+
+  void invalidateTenantProductUsageCache(tenantId).catch(() => {});
+  void syncOnboardingCompletionForTenant(tenantId).catch(() => {});
+
+  return { summary, results };
+}
+
 // ─── Preview from URL endpoint ────────────────────────────────────────────────
 
 export const previewXmlFromUrl = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -851,35 +1450,17 @@ export const previewXmlFromUrl = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
+    const tenantId = req.user!.tenantId!;
     let buffer: Buffer;
     try { buffer = await fetchUrlAsBuffer(url.trim()); }
     catch (e: any) { res.status(400).json({ error: e.message }); return; }
 
-    const { nodes, error, xmlFormat } = parseXmlToNodes(buffer);
-    if (error) { res.status(400).json({ error }); return; }
-    if (nodes.length === 0) { res.status(400).json({ error: 'XML içinde ürün bulunamadı.' }); return; }
-
-    const xmlFields        = collectXmlFields(nodes);
-    const sampleRows       = nodes.slice(0, 5).map(n => nodeToRow(n, xmlFields));
-    const suggestedMapping = suggestMapping(xmlFields);
-    const filename         = url.split('/').pop()?.split('?')[0] ?? 'url-import.xml';
-
-    res.json({
-      status: 'success',
-      data: {
-        totalRows:        nodes.length,
-        xmlFields,
-        sampleRows,
-        suggestedMapping,
-        targetFields:     TARGET_FIELDS,
-        filename,
-        fileSizeBytes:    buffer.length,
-        sourceUrl:        url.trim(),
-        xmlFormat,
-      },
-    });
+    const filename = url.split('/').pop()?.split('?')[0] ?? 'url-import.xml';
+    const data = await buildXmlUrlPreview(tenantId, buffer, { filename, sourceUrl: url.trim() });
+    res.json({ status: 'success', data });
   } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? 'URL önizleme sırasında hata oluştu.' });
+    const msg = err?.message ?? 'URL önizleme sırasında hata oluştu.';
+    res.status(msg.includes('bulunamadı') ? 400 : 500).json({ error: msg });
   }
 };
 
@@ -891,10 +1472,15 @@ export const importXmlFromUrl = async (req: AuthRequest, res: Response): Promise
   const userId    = req.user!.userId ?? req.user!.id;
 
   try {
-    const { url, mapping: rawMapping, duplicateMode: rawMode } = req.body as {
+    const {
+      url, mapping: rawMapping, duplicateMode: rawMode, skipZeroStock: rawSkipZero,
+      customTargetLabels: rawCustomLabels,
+    } = req.body as {
       url?: string;
       mapping?: Record<string, string>;
       duplicateMode?: string;
+      skipZeroStock?: boolean;
+      customTargetLabels?: Record<string, string>;
     };
 
     if (!url || typeof url !== 'string' || !url.trim()) {
@@ -902,8 +1488,10 @@ export const importXmlFromUrl = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const mapping:       Record<string, string> = rawMapping ?? {};
-    const duplicateMode: DuplicateMode          = (rawMode as DuplicateMode) ?? 'skip';
+    const mapping:              Record<string, string> = rawMapping ?? {};
+    const duplicateMode:        DuplicateMode          = (rawMode as DuplicateMode) ?? 'skip';
+    const skipZeroStock         = Boolean(rawSkipZero);
+    const customTargetLabels    = parseCustomTargetLabels(rawCustomLabels);
 
     // Validate required mapping
     const mappedTargets = Object.values(mapping).filter(v => v !== '__ignore__');
@@ -914,144 +1502,23 @@ export const importXmlFromUrl = async (req: AuthRequest, res: Response): Promise
     try { buffer = await fetchUrlAsBuffer(url.trim()); }
     catch (e: any) { res.status(400).json({ error: e.message }); return; }
 
-    const { nodes, error } = parseXmlToNodes(buffer);
-    if (error || nodes.length === 0) { res.status(400).json({ error: error ?? 'XML içinde ürün bulunamadı.' }); return; }
-
-    // Reuse the same processing logic from file import
-    const existingByBarcode = new Map<string, { id: string; name: string }>();
-    const existingBySku     = new Map<string, { id: string; name: string }>();
-    const existingProducts  = await prisma.product.findMany({
-      where:  { tenantId, barcode: { not: null } },
-      select: { id: true, name: true, barcode: true, sku: true },
-    });
-    for (const p of existingProducts) {
-      if (p.barcode) existingByBarcode.set(p.barcode.trim().toLowerCase(), { id: p.id, name: p.name });
-      if (p.sku)     existingBySku.set(p.sku.trim().toLowerCase(),         { id: p.id, name: p.name });
-    }
-
-    const results:    ImportRowResult[] = [];
-    let importedCnt  = 0, updatedCnt = 0, skippedCnt = 0, failedCnt = 0;
-
-    for (let i = 0; i < nodes.length; i++) {
-      const row    = i + 1;
-      const node   = nodes[i];
-      const data   = applyMapping(node, mapping);
-      const errors = validateRow(data, row);
-
-      if (errors.length > 0) {
-        results.push({ row, name: data.name ?? '—', barcode: data.barcode ?? '', status: 'error', errors: errors.map(e => `${e.field}: ${e.message}`) });
-        failedCnt++; continue;
-      }
-
-      const barcodeKey = data.barcode ? data.barcode.trim().toLowerCase() : null;
-      const skuKey     = data.sku     ? data.sku.trim().toLowerCase()     : null;
-      const existing   = (barcodeKey && existingByBarcode.get(barcodeKey)) || (skuKey && existingBySku.get(skuKey)) || null;
-
-      if (existing) {
-        if (duplicateMode === 'error') {
-          results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'error', errors: [`Mevcut ürün ile çakışma: "${existing.name}"`] });
-          failedCnt++; continue;
-        }
-        if (duplicateMode === 'skip') {
-          results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'skipped', errors: [`Atlandı: "${existing.name}" ile çakışma`] });
-          skippedCnt++; continue;
-        }
-        // update
-        try {
-          await prisma.product.update({
-            where: { id: existing.id },
-            data: {
-              name: data.name!, price: data.price!,
-              ...(data.barcode     ? { barcode: data.barcode }         : {}),
-              ...(data.sku         ? { sku: data.sku }                 : {}),
-              ...(data.description ? { description: data.description } : {}),
-              ...(data.brand       ? { brand: data.brand }             : {}),
-              ...(data.unit        ? { unit: data.unit }               : {}),
-            },
-          });
-          await prisma.productPrice.upsert({
-            where:  { productId: existing.id },
-            create: { productId: existing.id, salePrice: data.price!, discountPrice: data.discountPrice ?? null, vatRate: 18, currency: 'TRY' },
-            update: { salePrice: data.price!, ...(data.discountPrice != null ? { discountPrice: data.discountPrice } : {}) },
-          });
-          if (data.stock != null) {
-            await prisma.stock.upsert({
-              where:  { productId: existing.id },
-              create: { productId: existing.id, tenantId, quantity: data.stock, unit: data.unit ?? 'adet' },
-              update: { quantity: data.stock },
-            });
-          }
-          if (data.imageUrl) {
-            const existingImg = await prisma.productImage.findFirst({ where: { productId: existing.id, isMain: true } });
-            if (existingImg) {
-              await prisma.productImage.update({ where: { id: existingImg.id }, data: { url: data.imageUrl } });
-            } else {
-              await prisma.productImage.create({ data: { productId: existing.id, url: data.imageUrl, isMain: true, alt: data.name ?? '', order: 0 } });
-            }
-          }
-          if (barcodeKey) existingByBarcode.set(barcodeKey, { id: existing.id, name: data.name! });
-          results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'updated' });
-          updatedCnt++;
-        } catch (e: any) {
-          results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'error', errors: [e.message] });
-          failedCnt++;
-        }
-        continue;
-      }
-
-      // create
-      try {
-        const slug    = await generateUniqueProductSlug(data.name!, tenantId);
-        const created = await prisma.product.create({
-          data: {
-            name: data.name!, slug, price: data.price!,
-            barcode: data.barcode ?? null, sku: data.sku ?? null,
-            description: data.description ?? null, brand: data.brand ?? null,
-            unit: data.unit ?? 'adet', status: 'draft', isActive: false, hasVariants: false,
-            tenant:  { connect: { id: tenantId } },
-            pricing: { create: { salePrice: data.price!, discountPrice: data.discountPrice ?? null, vatRate: 18, currency: 'TRY' } },
-          },
-        });
-        if (data.stock != null) {
-          await prisma.stock.create({ data: { productId: created.id, tenantId, quantity: data.stock, unit: data.unit ?? 'adet' } });
-        }
-        if (data.imageUrl) {
-          await prisma.productImage.create({
-            data: { productId: created.id, url: data.imageUrl, isMain: true, alt: data.name ?? '', order: 0 },
-          }).catch(() => {});
-        }
-        if (barcodeKey) existingByBarcode.set(barcodeKey, { id: created.id, name: created.name });
-        if (skuKey)     existingBySku.set(skuKey,         { id: created.id, name: created.name });
-        results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'imported' });
-        importedCnt++;
-      } catch (e: any) {
-        results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'error', errors: [e.message] });
-        failedCnt++;
-      }
-    }
-
-    const summary = { total: nodes.length, imported: importedCnt, updated: updatedCnt, skipped: skippedCnt, failed: failedCnt };
-    const filename = url.split('/').pop()?.split('?')[0] ?? 'url-import.xml';
-
+    const logFilename = url.split('/').pop()?.split('?')[0] ?? 'url-import.xml';
     try {
-      await prisma.importLog.create({
-        data: {
-          filename,
-          type:        'XML',
-          status:      failedCnt === nodes.length ? 'failed' : failedCnt > 0 ? 'partial' : 'success',
-          totalRows:   nodes.length,
-          successRows: importedCnt + updatedCnt,
-          failedRows:  failedCnt,
-          errors:      results.filter(r => r.status === 'error').slice(0, 200) as any,
-          startedAt,
-          completedAt: new Date(),
-          createdBy:   userId,
-          tenant:      { connect: { id: tenantId } },
-        },
+      const { summary, results } = await runXmlUrlImportPipeline({
+        tenantId,
+        userId,
+        buffer,
+        mapping,
+        customTargetLabels,
+        duplicateMode,
+        skipZeroStock,
+        startedAt,
+        logFilename,
       });
-    } catch { /* non-blocking */ }
-
-    res.json({ status: 'success', summary, results });
+      res.json({ status: 'success', summary, results });
+    } catch (e: any) {
+      res.status(400).json({ error: e?.message ?? 'XML işlenemedi.' });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? 'URL import sırasında hata oluştu.' });
   }
@@ -1064,17 +1531,20 @@ export const importXmlFromUrl = async (req: AuthRequest, res: Response): Promise
 // Final line:   { type: 'done', summary, results }
 
 async function streamImportNodes(params: {
-  res:            Response;
-  nodes:          Record<string, string>[];
-  mapping:        Record<string, string>;
-  duplicateMode:  DuplicateMode;
-  skipZeroStock:  boolean;
-  tenantId:       string;
-  userId:         string;
-  filename:       string;
-  startedAt:      Date;
+  res:                  Response;
+  nodes:                Record<string, string>[];
+  mapping:              Record<string, string>;
+  customTargetLabels?: Record<string, string>;
+  duplicateMode:        DuplicateMode;
+  skipZeroStock:        boolean;
+  tenantId:             string;
+  userId:               string;
+  filename:             string;
+  startedAt:            Date;
 }): Promise<void> {
-  const { res, nodes, mapping, duplicateMode, skipZeroStock, tenantId, userId, filename, startedAt } = params;
+  const {
+    res, nodes, mapping, customTargetLabels = {}, duplicateMode, skipZeroStock, tenantId, userId, filename, startedAt,
+  } = params;
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache');
@@ -1093,7 +1563,13 @@ async function streamImportNodes(params: {
 
   try {
     const existingProducts = await prisma.product.findMany({
-      where:  { tenantId, barcode: { not: null } },
+      where: {
+        tenantId,
+        OR: [
+          { barcode: { not: null } },
+          { sku:     { not: null } },
+        ],
+      },
       select: { id: true, name: true, barcode: true, sku: true },
     });
     for (const p of existingProducts) {
@@ -1113,6 +1589,8 @@ async function streamImportNodes(params: {
     res.end();
     return;
   }
+
+  const productQuotaStream = await createProductQuotaTracker(tenantId);
 
   // Helper: find or create a category by name, returns its id
   const findOrCreateCategory = async (rawName: string): Promise<string | null> => {
@@ -1175,7 +1653,8 @@ async function streamImportNodes(params: {
 
     const row    = i + 1;
     const node   = nodes[i];
-    const data   = applyMapping(node, mapping);
+    const data   = applyMapping(node, mapping, customTargetLabels);
+    await applyImportPricingRules(tenantId, data);
     const errors = validateRow(data, row);
     let   rowStatus: ImportRowResult['status'] = 'error';
 
@@ -1188,7 +1667,8 @@ async function streamImportNodes(params: {
     } else {
       const barcodeKey = data.barcode ? data.barcode.trim().toLowerCase() : null;
       const skuKey     = data.sku     ? data.sku.trim().toLowerCase()     : null;
-      const existing   = (barcodeKey && existingByBarcode.get(barcodeKey)) || (skuKey && existingBySku.get(skuKey)) || null;
+      // Prefer SKU match over barcode per "SKU varsa → update" rule.
+      const existing   = (skuKey && existingBySku.get(skuKey)) || (barcodeKey && existingByBarcode.get(barcodeKey)) || null;
 
       if (existing) {
         if (duplicateMode === 'error') {
@@ -1211,6 +1691,9 @@ async function streamImportNodes(params: {
                 ...(data.brand       ? { brand: data.brand }             : {}),
                 ...(data.unit        ? { unit: data.unit }               : {}),
                 ...(categoryId       ? { category: { connect: { id: categoryId } } } : {}),
+                ...(data.customFields && Object.keys(data.customFields).length > 0
+                  ? { customFields: await mergeCustomFieldsForProduct(existing.id, data.customFields) }
+                  : {}),
               },
             });
             await prisma.productPrice.upsert({
@@ -1244,6 +1727,11 @@ async function streamImportNodes(params: {
       } else {
         // create
         try {
+          if (!productQuotaStream.canCreate()) {
+            productQuotaStream.recordPlanLimitSkip();
+            results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'skipped', errors: ['Plan ürün kotası doldu; satır atlandı.'] });
+            skippedCnt++; rowStatus = 'skipped';
+          } else {
           const categoryId = data.category ? await findOrCreateCategory(data.category) : null;
           const slug       = await generateUniqueProductSlug(data.name!, tenantId);
           const created    = await prisma.product.create({
@@ -1251,12 +1739,18 @@ async function streamImportNodes(params: {
               name: data.name!, slug, price: data.price!,
               barcode: data.barcode ?? null, sku: data.sku ?? null,
               description: data.description ?? null, brand: data.brand ?? null,
-              unit: data.unit ?? 'adet', status: 'draft', isActive: false, hasVariants: false,
+              unit: data.unit ?? 'adet',
+              ...(data.customFields && Object.keys(data.customFields).length > 0
+                ? { customFields: data.customFields }
+                : {}),
+              ...XML_IMPORT_NEW_PRODUCT,
+              hasVariants: false,
               tenant:   { connect: { id: tenantId } },
               ...(categoryId ? { category: { connect: { id: categoryId } } } : {}),
               pricing: { create: { salePrice: data.price!, discountPrice: data.discountPrice ?? null, vatRate: 18, currency: 'TRY' } },
             },
           });
+          productQuotaStream.recordCreated();
           if (data.stock != null) {
             await prisma.stock.create({ data: { productId: created.id, tenantId, quantity: data.stock, unit: data.unit ?? 'adet' } });
           }
@@ -1273,6 +1767,7 @@ async function streamImportNodes(params: {
           if (skuKey)     existingBySku.set(skuKey,         { id: created.id, name: created.name });
           results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'imported' });
           importedCnt++; rowStatus = 'imported';
+          }
         } catch (e: any) {
           results.push({ row, name: data.name!, barcode: data.barcode ?? '', status: 'error', errors: [e.message] });
           failedCnt++; rowStatus = 'error';
@@ -1283,7 +1778,16 @@ async function streamImportNodes(params: {
     send({ type: 'progress', current: row, total: nodes.length, name: data.name ?? `Satır ${row}`, status: rowStatus });
   }
 
-  const summary = { total: nodes.length, imported: importedCnt, updated: updatedCnt, skipped: skippedCnt, failed: failedCnt };
+  const skippedPlanLimitStream = productQuotaStream.getSkippedPlanLimit();
+  const summary = {
+    total:             nodes.length,
+    imported:          importedCnt,
+    updated:           updatedCnt,
+    skipped:           skippedCnt,
+    skippedPlanLimit:  skippedPlanLimitStream,
+    failed:            failedCnt,
+    ...(skippedPlanLimitStream > 0 ? { reason: 'PLAN_LIMIT' as const } : {}),
+  };
 
   try {
     await prisma.importLog.create({
@@ -1303,6 +1807,9 @@ async function streamImportNodes(params: {
     });
   } catch { /* non-blocking */ }
 
+  void invalidateTenantProductUsageCache(tenantId).catch(() => {});
+  void syncOnboardingCompletionForTenant(tenantId).catch(() => {});
+
   send({ type: 'done', summary, results });
   res.end();
 }
@@ -1320,10 +1827,12 @@ export const importXmlStream = async (req: AuthRequest, res: Response): Promise<
     let mapping: Record<string, string> = {};
     let duplicateMode: DuplicateMode = 'skip';
     let skipZeroStock = false;
+    let customTargetLabels: Record<string, string> = {};
     try {
-      if (req.body.mapping)       mapping       = JSON.parse(req.body.mapping);
-      if (req.body.duplicateMode) duplicateMode = req.body.duplicateMode as DuplicateMode;
-      if (req.body.skipZeroStock) skipZeroStock = req.body.skipZeroStock === 'true' || req.body.skipZeroStock === true;
+      if (req.body.mapping)            mapping            = JSON.parse(req.body.mapping);
+      if (req.body.duplicateMode)        duplicateMode      = req.body.duplicateMode as DuplicateMode;
+      if (req.body.skipZeroStock)        skipZeroStock      = req.body.skipZeroStock === 'true' || req.body.skipZeroStock === true;
+      if (req.body.customTargetLabels)   customTargetLabels = parseCustomTargetLabels(req.body.customTargetLabels);
     } catch {
       res.status(400).json({ error: 'Geçersiz mapping JSON formatı.' }); return;
     }
@@ -1335,7 +1844,10 @@ export const importXmlStream = async (req: AuthRequest, res: Response): Promise<
     const { nodes, error } = parseXmlToNodes(req.file.buffer);
     if (error || nodes.length === 0) { res.status(400).json({ error: error ?? 'XML içinde ürün bulunamadı.' }); return; }
 
-    await streamImportNodes({ res, nodes, mapping, duplicateMode, skipZeroStock, tenantId, userId, filename: req.file.originalname, startedAt });
+    await streamImportNodes({
+      res, nodes, mapping, customTargetLabels, duplicateMode, skipZeroStock, tenantId, userId,
+      filename: req.file.originalname, startedAt,
+    });
   } catch (err: any) {
     if (!res.headersSent) {
       res.status(500).json({ error: err?.message ?? 'XML stream hatası.' });
@@ -1353,18 +1865,23 @@ export const importXmlFromUrlStream = async (req: AuthRequest, res: Response): P
   const userId    = req.user!.userId ?? req.user!.id;
 
   try {
-    const { url, mapping: rawMapping, duplicateMode: rawMode, skipZeroStock: rawSkipZero } = req.body as {
+    const {
+      url, mapping: rawMapping, duplicateMode: rawMode, skipZeroStock: rawSkipZero,
+      customTargetLabels: rawCustomLabels,
+    } = req.body as {
       url?: string;
       mapping?: Record<string, string>;
       duplicateMode?: string;
       skipZeroStock?: boolean;
+      customTargetLabels?: Record<string, string>;
     };
 
     if (!url || typeof url !== 'string' || !url.trim()) { res.status(400).json({ error: 'url alanı zorunludur.' }); return; }
 
-    const mapping:       Record<string, string> = rawMapping ?? {};
-    const duplicateMode: DuplicateMode          = (rawMode as DuplicateMode) ?? 'skip';
-    const skipZeroStock: boolean                = rawSkipZero === true;
+    const mapping:              Record<string, string> = rawMapping ?? {};
+    const duplicateMode:        DuplicateMode          = (rawMode as DuplicateMode) ?? 'skip';
+    const skipZeroStock:        boolean                = rawSkipZero === true;
+    const customTargetLabels    = parseCustomTargetLabels(rawCustomLabels);
 
     const mappedTargets = Object.values(mapping).filter(v => v !== '__ignore__');
     if (!mappedTargets.includes('name'))  { res.status(422).json({ error: 'Ürün Adı alanı eşleştirilmesi zorunludur.' }); return; }
@@ -1378,7 +1895,9 @@ export const importXmlFromUrlStream = async (req: AuthRequest, res: Response): P
     if (error || nodes.length === 0) { res.status(400).json({ error: error ?? 'XML içinde ürün bulunamadı.' }); return; }
 
     const filename = url.split('/').pop()?.split('?')[0] ?? 'url-import.xml';
-    await streamImportNodes({ res, nodes, mapping, duplicateMode, skipZeroStock, tenantId, userId, filename, startedAt });
+    await streamImportNodes({
+      res, nodes, mapping, customTargetLabels, duplicateMode, skipZeroStock, tenantId, userId, filename, startedAt,
+    });
   } catch (err: any) {
     if (!res.headersSent) {
       res.status(500).json({ error: err?.message ?? 'URL stream hatası.' });

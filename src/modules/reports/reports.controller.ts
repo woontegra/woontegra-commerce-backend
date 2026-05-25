@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { Parser } from 'json2csv';
 import { logger } from '../../config/logger';
+import { getOrderPaymentSummary } from '../orders/order-payment-summary.service';
 
 const prisma = new PrismaClient();
 
@@ -40,11 +41,13 @@ export class ReportsController {
       const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 90);
 
       // ── Aggregate counts (all-time) ─────────────────────────────────────────
-      const [successCount, errorCount, skippedCount, totalProducts] = await Promise.all([
+      const [successCount, errorCount, skippedCount, totalProducts, paymentSummary] =
+        await Promise.all([
         prisma.integrationLog.count({ where: { tenantId, status: 'success' } }),
         prisma.integrationLog.count({ where: { tenantId, status: 'error'   } }),
         prisma.integrationLog.count({ where: { tenantId, status: 'skipped' } }),
         prisma.product.count({         where: { tenantId } }),
+        getOrderPaymentSummary(tenantId, days),
       ]);
 
       const successRate =
@@ -112,6 +115,7 @@ export class ReportsController {
             productName: t.productName,
             errorCount:  t._count.status,
           })),
+          paymentSummary,
         },
       });
     } catch (error: any) {

@@ -310,23 +310,53 @@ export class TrendyolClient {
     }
   }
 
+  /**
+   * Trendyol stok/fiyat güncelleme — resmi endpoint:
+   * POST /integration/inventory/sellers/{sellerId}/products/price-and-inventory
+   * (PUT + /integration/product/... yolu 404 döner)
+   */
   async updateStockAndPrice(updates: Array<{
     barcode: string;
     quantity: number;
     price: number;
-  }>): Promise<void> {
-    const url = `https://apigw.trendyol.com/integration/product/sellers/${this.credentials.sellerId}/products/price-and-inventory`;
+    listPrice?: number;
+  }>): Promise<{ batchRequestId?: string; id?: string }> {
+    const url = `https://apigw.trendyol.com/integration/inventory/sellers/${this.credentials.sellerId}/products/price-and-inventory`;
+
+    console.log(`[TrendyolClient] ── updateStockAndPrice (POST) ${updates.length} barkod ──`);
+    console.log('[TrendyolClient] URL:', url);
+
     try {
-      await axios.put(url, {
-        items: updates.map(update => ({
-          barcode:   update.barcode,
-          quantity:  update.quantity,
-          salePrice: update.price,
-        })),
-      }, { headers: this.commonHeaders, timeout: 30_000 });
+      const response = await axios.post(url, {
+        items: updates.map(update => {
+          const item: Record<string, unknown> = {
+            barcode:   update.barcode,
+            quantity:  Math.max(0, Math.round(update.quantity)),
+            salePrice: update.price,
+          };
+          if (update.listPrice != null && update.listPrice > 0) {
+            item.listPrice = update.listPrice;
+          }
+          return item;
+        }),
+      }, { headers: this.commonHeaders, timeout: 60_000 });
+
+      console.log('[TrendyolClient] ✅ price-and-inventory', response.status, JSON.stringify(response.data));
+      return response.data ?? {};
     } catch (error: any) {
-      const msg = error.response?.data?.message ?? error.message ?? 'Trendyol fiyat/stok güncelleme hatası';
-      throw new Error(`Fiyat/stok güncelleme başarısız: ${msg}`);
+      const status = error.response?.status;
+      const data   = error.response?.data;
+      const detail = typeof data === 'string'
+        ? data
+        : (data?.message ?? data?.errors?.[0]?.message ?? JSON.stringify(data ?? {}));
+      console.error('[TrendyolClient] ❌ price-and-inventory', status, detail);
+
+      if (status === 404) {
+        throw new Error(
+          'Trendyol fiyat/stok endpoint bulunamadı (404). Barkod Trendyol\'da kayıtlı olmayabilir — önce Ürün Gönderme ile ürünü oluşturun.',
+        );
+      }
+      throw new Error(`Fiyat/stok güncelleme başarısız (${status ?? 'NET'}): ${detail || error.message}`);
     }
   }
 

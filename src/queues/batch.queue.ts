@@ -2,6 +2,8 @@ import { Job } from 'bullmq';
 import { createQueue, createWorker, QUEUE_NAMES } from '../config/queue';
 import { logger } from '../config/logger';
 import { PrismaClient } from '@prisma/client';
+import { checkProductLimit, invalidateTenantProductUsageCache } from '../services/planQuota.service';
+import { syncOnboardingCompletionForTenant } from '../services/onboardingCompletion.service';
 
 const prisma = new PrismaClient();
 
@@ -149,11 +151,17 @@ async function processBatchItem(
  * Bulk email processing
  */
 async function processBulkEmail(item: any, tenantId: string, options?: any): Promise<void> {
-  // TODO: Implement email sending
-  logger.debug('[BatchQueue] Processing bulk email', { item });
-  
-  // Simulate email sending
-  await new Promise(resolve => setTimeout(resolve, 100));
+  const { sendEmailAsync } = await import('./email.queue');
+  const to = item?.to ?? item?.email;
+  if (!to) {
+    logger.warn('[BatchQueue] bulk email missing recipient', { tenantId, item });
+    return;
+  }
+  await sendEmailAsync({
+    to: String(to),
+    subject: item?.subject ?? options?.subject ?? 'Woontegra Bildirimi',
+    html:    item?.html ?? item?.body ?? '<p>Bildirim</p>',
+  });
 }
 
 /**
@@ -202,6 +210,7 @@ async function processBulkDelete(item: any, tenantId: string, options?: any): Pr
     await prisma.product.delete({
       where: { id, tenantId },
     });
+    void invalidateTenantProductUsageCache(tenantId).catch(() => {});
   } else if (model === 'order') {
     await prisma.order.delete({
       where: { id, tenantId },
@@ -219,12 +228,15 @@ async function processBulkImport(item: any, tenantId: string, options?: any): Pr
 
   // Dynamic model create
   if (model === 'product') {
+    await checkProductLimit(tenantId, 1);
     await prisma.product.create({
       data: {
         ...data,
         tenantId,
       },
     });
+    void invalidateTenantProductUsageCache(tenantId).catch(() => {});
+    void syncOnboardingCompletionForTenant(tenantId).catch(() => {});
   } else if (model === 'customer') {
     await prisma.customer.create({
       data: {

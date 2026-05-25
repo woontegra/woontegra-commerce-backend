@@ -1,76 +1,70 @@
-import winston from 'winston';
-import DailyRotateFile from 'winston-daily-rotate-file';
-import path from 'path';
+/**
+ * Merkezi Winston logger — yapılandırılmış JSON (dosya) + okunabilir konsol.
+ * Modül logları: common/logging/loggers.ts
+ */
+import { writeStructured, winstonLogger } from '../common/logging/create-winston';
+import { normalizeLogRecord } from '../common/logging/normalize';
+import type { LogLevel } from '../common/logging/types';
 
-const logDir = 'logs';
+export {
+  authLogger,
+  billingLogger,
+  trendyolLogger,
+  xmlLogger,
+  appLogger,
+  createModuleLogger,
+} from '../common/logging';
 
-// Define log format
-const logFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  winston.format.errors({ stack: true }),
-  winston.format.splat(),
-  winston.format.json()
-);
+type LegacyMeta = Record<string, unknown>;
 
-// Console format for development
-const consoleFormat = winston.format.combine(
-  winston.format.colorize(),
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  winston.format.printf(({ timestamp, level, message, ...meta }) => {
-    let msg = `${timestamp} [${level}]: ${message}`;
-    if (Object.keys(meta).length > 0) {
-      msg += ` ${JSON.stringify(meta)}`;
-    }
-    return msg;
-  })
-);
-
-// Create logger instance
-export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: logFormat,
-  transports: [
-    // Error logs
-    new DailyRotateFile({
-      filename: path.join(logDir, 'error-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      level: 'error',
-      maxSize: '20m',
-      maxFiles: '14d',
-      zippedArchive: true,
-    }),
-    // Combined logs
-    new DailyRotateFile({
-      filename: path.join(logDir, 'combined-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      maxSize: '20m',
-      maxFiles: '14d',
-      zippedArchive: true,
-    }),
-    // Request logs
-    new DailyRotateFile({
-      filename: path.join(logDir, 'requests-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
-      level: 'http',
-      maxSize: '20m',
-      maxFiles: '7d',
-      zippedArchive: true,
-    }),
-  ],
-});
-
-// Add console transport in development
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(
-    new winston.transports.Console({
-      format: consoleFormat,
-    })
-  );
+function logLegacy(level: LogLevel, first: string | LegacyMeta, second?: LegacyMeta): void {
+  if (typeof first === 'string') {
+    writeStructured(level, 'app', {
+      action: first,
+      message: first,
+      ...(second ?? {}),
+    });
+    return;
+  }
+  writeStructured(level, 'app', first);
 }
 
-// Create a stream object for Morgan
+/** Geriye dönük uyumluluk — mevcut logger.info({ message }) çağrıları */
+export const logger = {
+  info(first: string | LegacyMeta, second?: LegacyMeta) {
+    logLegacy('info', first, second);
+  },
+  warn(first: string | LegacyMeta, second?: LegacyMeta) {
+    logLegacy('warn', first, second);
+  },
+  error(first: string | LegacyMeta, second?: LegacyMeta) {
+    logLegacy('error', first, second);
+  },
+  /** Eski kod — http seviyesi info olarak yazılır */
+  http(first: string | LegacyMeta, second?: LegacyMeta) {
+    logLegacy('info', first, second);
+  },
+  debug(first: string | LegacyMeta, second?: LegacyMeta) {
+    if ((process.env.LOG_LEVEL || 'info') === 'debug') {
+      logLegacy('info', first, second);
+    }
+  },
+  log(level: string, first: string | LegacyMeta, second?: LegacyMeta) {
+    const l = level === 'warn' || level === 'error' ? level : 'info';
+    logLegacy(l as LogLevel, first, second);
+  },
+  add: winstonLogger.add.bind(winstonLogger),
+};
+
 export const stream = {
   write: (message: string) => {
-    logger.http(message.trim());
+    const trimmed = message.trim();
+    writeStructured('info', 'app', {
+      action: 'http_request',
+      message: trimmed,
+      status: 'success',
+    });
   },
 };
+
+export { normalizeLogRecord, winstonLogger };

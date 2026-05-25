@@ -10,6 +10,7 @@ export interface BatchResult {
   status:      'pending' | 'sending' | 'success' | 'error' | 'skipped';
   message:     string;
   trendyolBatchId?: string;
+  barcode?:      string;
 }
 
 export interface BatchJob {

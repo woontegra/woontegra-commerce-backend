@@ -8,6 +8,15 @@ import { invalidateCache } from '../../common/middleware/cache.middleware';
 import prisma from '../../config/database';
 import { ensureBarcode, canOverrideBarcode } from './barcode.service';
 import { syncQueue } from '../trendyol/trendyol-sync-queue.service';
+import { AppError } from '../../common/middleware/AppError';
+import {
+  computeBulkNewPrice,
+  getProductBasePrice,
+  normalizePriceType,
+  parseOptionalNumber,
+  resolveBulkProductIds,
+  type BulkPriceScope,
+} from '../pricing/pricing-rule.service';
 
 // ─── Image upload (disk storage) ─────────────────────────────────────────────
 
@@ -194,6 +203,14 @@ export class ProductController {
       console.info(`[Product.create] total=${Date.now()-t0}ms create=${t2-t1}ms stock=${t3-t2}ms`);
       res.status(201).json({ status: 'success', data: product });
     } catch (err: any) {
+      if (err instanceof AppError) {
+        res.status(err.statusCode).json({
+          error:   err.code,
+          message: err.message,
+          code:    err.code,
+        });
+        return;
+      }
       console.error('[Product.create] ERROR:', {
         message:  err?.message,
         code:     err?.code,
@@ -258,9 +275,38 @@ export class ProductController {
       await this.svc.delete(req.params.id, tenantId);
       await invalidateCache(`product:${tenantId}:*${req.params.id}*`);
       await invalidateCache(`products:${tenantId}:*`);
+      await invalidateCache(`products:public:*`);
       res.status(204).send();
     } catch (err: any) {
-      res.status(400).json({ error: err?.message });
+      const msg = err?.message ?? 'Ürün silinemedi.';
+      const status = /bulunamadı|not found/i.test(msg) ? 404 : 400;
+      res.status(status).json({ error: msg });
+    }
+  };
+
+  // ── POST /api/products/bulk-delete ─────────────────────────────────────────
+
+  bulkDelete = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user!.tenantId;
+      const { ids } = req.body as { ids?: string[] };
+
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        res.status(400).json({ error: 'ids dizisi zorunludur.' });
+        return;
+      }
+
+      const result = await this.svc.bulkDelete(ids, tenantId);
+      await invalidateCache(`products:${tenantId}:*`);
+      await invalidateCache(`products:public:*`);
+
+      res.json({
+        status: 'success',
+        deleted: result.deleted,
+        notFound: result.notFound,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? 'Toplu silme başarısız.' });
     }
   };
 
@@ -430,10 +476,9 @@ export class ProductController {
         const skuVal  = v.sku?.trim() || null;
         const comboJson = v.combination ?? {};
         const displayName = v.name
-          ?? (Array.isArray(v.attributeValues) && v.attributeValues.length > 0
+          ?? ((Array.isArray(v.attributeValues) && v.attributeValues.length > 0
             ? v.attributeValues.map((av: any) => av.label ?? av.textValue ?? av.valueId ?? '').join(' / ')
-            : Object.values(comboJson).join(' / '))
-          || 'Varyant';
+            : Object.values(comboJson).join(' / ')) || 'Varyant');
 
         let variantId: string;
 
@@ -738,105 +783,159 @@ export class ProductController {
     }
   };
 
+  // ── POST /api/products/bulk-price-update/preview ─────────────────────────
+
+  bulkPriceUpdatePreview = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user!.tenantId;
+      const payload = this.parseBulkPriceBody(req.body);
+      if ('error' in payload) {
+        res.status(400).json({ error: payload.error });
+        return;
+      }
+
+      const ids = await resolveBulkProductIds(
+        tenantId,
+        payload.scope,
+        payload.productIds,
+        payload.categoryId,
+      );
+      if (ids.length === 0) {
+        res.status(400).json({ error: 'Güncellenecek ürün bulunamadı.' });
+        return;
+      }
+      if (ids.length > 5000) {
+        res.status(400).json({ error: 'En fazla 5000 ürün için önizleme yapılabilir.' });
+        return;
+      }
+
+      const previewLimit = Math.min(100, ids.length);
+      const previewIds = ids.slice(0, previewLimit);
+
+      const products = await prisma.product.findMany({
+        where:   { id: { in: previewIds }, tenantId },
+        include: { pricing: true },
+        orderBy: { name: 'asc' },
+      });
+
+      const items = products.map(p => {
+        const currentPrice = getProductBasePrice(p);
+        const newPrice = computeBulkNewPrice(currentPrice, {
+          percent: payload.percent,
+          fixed:   payload.fixed,
+          includeTax: payload.includeTax,
+        });
+        return {
+          productId:    p.id,
+          name:         p.name,
+          barcode:      p.barcode,
+          currentPrice,
+          newPrice,
+        };
+      });
+
+      res.json({
+        totalCount: ids.length,
+        previewCount: items.length,
+        items,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message ?? 'Önizleme oluşturulamadı.' });
+    }
+  };
+
   // ── POST /api/products/bulk-price-update ─────────────────────────────────
-  // Full bulk price update: supports percentage / fixed increase on product
-  // price AND/OR all variant prices, with optional tax inclusion.
 
   bulkPriceUpdate = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user!.tenantId;
-
-      const {
-        productIds,
-        type,
-        value,
-        applyTo     = 'product',
-        includeTax  = false,
-      } = req.body as {
-        productIds:  string[];
-        type:        'percentage' | 'fixed';
-        value:       number;
-        applyTo?:    'product' | 'variants' | 'both';
-        includeTax?: boolean;
-      };
-
-      // ── Validation ──────────────────────────────────────────────────────────
-      if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
-        res.status(400).json({ error: 'productIds dizisi zorunludur.' }); return;
-      }
-      if (!['percentage', 'fixed'].includes(type)) {
-        res.status(400).json({ error: 'type "percentage" veya "fixed" olmalıdır.' }); return;
-      }
-      if (typeof value !== 'number' || isNaN(value)) {
-        res.status(400).json({ error: 'Geçersiz değer.' }); return;
-      }
-      if (value === 0) {
-        res.status(400).json({ error: 'Değer 0 olamaz.' }); return;
+      const payload = this.parseBulkPriceBody(req.body);
+      if ('error' in payload) {
+        res.status(400).json({ error: payload.error });
+        return;
       }
 
-      // ── Helper: compute new price ────────────────────────────────────────────
-      const calc = (base: number): number => {
-        let newPrice: number;
-        if (type === 'percentage') {
-          newPrice = base * (1 + value / 100);
-        } else {
-          newPrice = base + value;
-        }
-        // Include tax: gross up the net price by 18% VAT if requested
-        if (includeTax) newPrice = newPrice * 1.18;
-        return Math.max(0, Math.round(newPrice * 100) / 100);
-      };
+      const ids = await resolveBulkProductIds(
+        tenantId,
+        payload.scope,
+        payload.productIds,
+        payload.categoryId,
+      );
+      if (ids.length === 0) {
+        res.status(400).json({ error: 'Güncellenecek ürün bulunamadı.' });
+        return;
+      }
+      if (ids.length > 5000) {
+        res.status(400).json({ error: 'Tek seferde en fazla 5000 ürün güncellenebilir.' });
+        return;
+      }
 
-      // ── Fetch products (tenant-scoped) ───────────────────────────────────────
-      const needVariants = applyTo === 'variants' || applyTo === 'both';
+      const needVariants = payload.applyTo === 'variants' || payload.applyTo === 'both';
       const products = await prisma.product.findMany({
-        where:   { id: { in: productIds }, tenantId },
+        where:   { id: { in: ids }, tenantId },
         include: {
           pricing:  true,
-          variants: needVariants,   // only load variants if we need them
+          variants: needVariants,
         },
       });
 
       if (products.length === 0) {
-        res.status(404).json({ error: 'Seçili ürünler bulunamadı.' }); return;
+        res.status(404).json({ error: 'Ürünler bulunamadı.' });
+        return;
       }
 
-      // ── Apply updates in a single transaction ────────────────────────────────
+      const calc = (base: number) =>
+        computeBulkNewPrice(base, {
+          percent: payload.percent,
+          fixed:   payload.fixed,
+          includeTax: payload.includeTax,
+        });
+
       let updatedProducts = 0;
       let updatedVariants = 0;
 
-      await prisma.$transaction(async (tx) => {
-        for (const p of products) {
-          const basePrice = Number(p.price ?? 0);
+      // Tek transaction'da yüzlerce ürün → Prisma timeout / disconnect; parça parça işle
+      const CHUNK_SIZE = 80;
+      const TX_OPTS = { maxWait: 15_000, timeout: 90_000 };
 
-          // ── Product-level price ────────────────────────────────────────────
-          if (applyTo === 'product' || applyTo === 'both') {
-            const np = calc(basePrice);
-            await tx.product.update({ where: { id: p.id }, data: { price: np } });
-            // Keep ProductPrice in sync
-            await tx.productPrice.upsert({
-              where:  { productId: p.id },
-              create: { productId: p.id, salePrice: np, vatRate: 18, currency: 'TRY' },
-              update: { salePrice: np },
-            });
-            updatedProducts++;
-          }
+      for (let i = 0; i < products.length; i += CHUNK_SIZE) {
+        const chunk = products.slice(i, i + CHUNK_SIZE);
+        const chunkResult = await prisma.$transaction(async (tx) => {
+          let up = 0;
+          let uv = 0;
+          for (const p of chunk) {
+            const basePrice = getProductBasePrice(p);
 
-          // ── Variant-level prices ───────────────────────────────────────────
-          if (needVariants && (p as any).variants?.length) {
-            for (const v of (p as any).variants as Array<{ id: string; price: any }>) {
-              // If variant has no own price → inherit product base price
-              const varBase = v.price !== null ? Number(v.price) : basePrice;
-              const nvp = calc(varBase);
-              await tx.productVariant.update({
-                where: { id: v.id },
-                data:  { price: nvp },
+            if (payload.applyTo === 'product' || payload.applyTo === 'both') {
+              const np = calc(basePrice);
+              await tx.product.update({ where: { id: p.id }, data: { price: np } });
+              await tx.productPrice.upsert({
+                where:  { productId: p.id },
+                create: { productId: p.id, salePrice: np, vatRate: 18, currency: 'TRY' },
+                update: { salePrice: np },
               });
-              updatedVariants++;
+              up++;
+            }
+
+            if (needVariants && (p as { variants?: Array<{ id: string; price: unknown }> }).variants?.length) {
+              for (const v of (p as { variants: Array<{ id: string; price: unknown }> }).variants) {
+                const varBase = v.price !== null && v.price !== undefined
+                  ? Number(v.price)
+                  : basePrice;
+                const nvp = calc(varBase);
+                await tx.productVariant.update({
+                  where: { id: v.id },
+                  data:  { price: nvp },
+                });
+                uv++;
+              }
             }
           }
-        }
-      });
+          return { up, uv };
+        }, TX_OPTS);
+        updatedProducts += chunkResult.up;
+        updatedVariants += chunkResult.uv;
+      }
 
       await invalidateCache(`products:${tenantId}:*`);
 
@@ -844,11 +943,76 @@ export class ProductController {
         success:         true,
         updatedCount:    updatedProducts,
         updatedVariants,
+        totalMatched:    products.length,
       });
     } catch (err: any) {
       res.status(500).json({ error: err?.message ?? 'Toplu fiyat güncelleme başarısız.' });
     }
   };
+
+  private parseBulkPriceBody(body: unknown):
+    | {
+        scope: BulkPriceScope;
+        productIds?: string[];
+        categoryId?: string;
+        percent?: number;
+        fixed?: number;
+        applyTo: 'product' | 'variants' | 'both';
+        includeTax: boolean;
+      }
+    | { error: string } {
+    const b = (body ?? {}) as Record<string, unknown>;
+    const scopeRaw = String(b.scope ?? 'selected').toLowerCase();
+    const scope: BulkPriceScope =
+      scopeRaw === 'all' ? 'all'
+      : scopeRaw === 'category' ? 'category'
+      : 'selected';
+
+    const productIds = Array.isArray(b.productIds)
+      ? (b.productIds as string[]).filter(Boolean)
+      : undefined;
+    const categoryId = typeof b.categoryId === 'string' ? b.categoryId : undefined;
+
+    if (scope === 'selected' && (!productIds || productIds.length === 0)) {
+      return { error: 'Seçili kapsam için productIds zorunludur.' };
+    }
+    if (scope === 'category' && !categoryId) {
+      return { error: 'Kategori kapsamı için categoryId zorunludur.' };
+    }
+
+    let percent = parseOptionalNumber(b.percent);
+    let fixed = parseOptionalNumber(b.fixed);
+
+    // Geriye dönük: type + value
+    if ((percent == null || percent === 0) && (fixed == null || fixed === 0)) {
+      const normType = normalizePriceType(String(b.type ?? ''));
+      const legacyValue = parseOptionalNumber(b.value);
+      if (normType && legacyValue != null && legacyValue !== 0) {
+        if (normType === 'percentage') percent = legacyValue;
+        else fixed = legacyValue;
+      }
+    }
+
+    const hasPercent = percent != null && percent !== 0;
+    const hasFixed = fixed != null && fixed !== 0;
+    if (!hasPercent && !hasFixed) {
+      return { error: 'Yüzde veya sabit değişim girin (en az biri, 0 hariç).' };
+    }
+
+    const applyToRaw = String(b.applyTo ?? 'product');
+    const applyTo =
+      applyToRaw === 'variants' || applyToRaw === 'both' ? applyToRaw : 'product';
+
+    return {
+      scope,
+      productIds,
+      categoryId,
+      percent: hasPercent ? percent : undefined,
+      fixed:   hasFixed ? fixed : undefined,
+      applyTo,
+      includeTax: !!b.includeTax,
+    };
+  }
 
   // ── PATCH /api/products/bulk/stock ────────────────────────────────────────
 

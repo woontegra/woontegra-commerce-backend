@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import { AppError } from '../../common/middleware/error.middleware';
+import { syncTenantDomainsFromTenant } from '../../services/tenantDomainSync.service';
 
 interface CreateTenantDto {
   name: string;
@@ -17,9 +18,16 @@ export class TenantService {
       throw new AppError('Tenant with this slug already exists', 409);
     }
 
-    return prisma.tenant.create({
+    const tenant = await prisma.tenant.create({
       data,
     });
+    await syncTenantDomainsFromTenant({
+      id:               tenant.id,
+      subdomain:        tenant.subdomain,
+      customDomain:     tenant.customDomain,
+      domainVerified:   tenant.domainVerified,
+    });
+    return tenant;
   }
 
   async getAll() {

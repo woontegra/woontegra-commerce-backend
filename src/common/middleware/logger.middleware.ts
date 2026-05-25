@@ -1,28 +1,41 @@
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '../../config/logger';
+import { appLogger } from '../logging/loggers';
+import type { TraceableRequest } from './requestId';
+
+type AuthUser = { userId?: string; tenantId?: string };
 
 export const requestLogger = (req: Request, res: Response, next: NextFunction) => {
   const startTime = Date.now();
+  const treq = req as TraceableRequest;
+  const user = (req as Request & { user?: AuthUser }).user;
 
-  // Log request
-  logger.http('Incoming request', {
-    method: req.method,
-    url: req.url,
-    ip: req.ip,
-    userAgent: req.get('user-agent'),
+  appLogger.info({
+    action:   'http_request',
+    status:   'pending',
+    message:  'Incoming request',
+    traceId:  treq.traceId ?? null,
+    method:   req.method,
+    path:     req.path,
+    tenantId: user?.tenantId ?? null,
+    userId:   user?.userId ?? null,
   });
 
-  // Log response
   res.on('finish', () => {
     const duration = Date.now() - startTime;
-    const logLevel = res.statusCode >= 400 ? 'warn' : 'http';
+    const failed = res.statusCode >= 400;
+    const log = failed ? appLogger.warn.bind(appLogger) : appLogger.info.bind(appLogger);
 
-    logger.log(logLevel, 'Request completed', {
-      method: req.method,
-      url: req.url,
+    log({
+      action:     'http_response',
+      status:     failed ? 'failure' : 'success',
+      message:    'Request completed',
+      traceId:    treq.traceId ?? null,
+      method:     req.method,
+      path:       req.path,
       statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      ip: req.ip,
+      durationMs: duration,
+      tenantId:   user?.tenantId ?? null,
+      userId:     user?.userId ?? null,
     });
   });
 

@@ -3,14 +3,23 @@ import { PrismaClient, BillingCycle, Plan } from '@prisma/client';
 import { BillingService, PLAN_PRICES_TRY } from './billing.service';
 import { InvoiceService } from './invoice.service';
 import { logger } from '../../config/logger';
+import Stripe from 'stripe';
 
 const prisma = new PrismaClient();
 
 const billingService = new BillingService();
 const invoiceService = new InvoiceService();
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-03-31.basil' })
+  : null;
 
 interface AuthRequest extends Request {
   user?: { userId: string; tenantId: string; role: string; email: string };
+}
+
+function getPlanPrice(plan: Plan, billingCycle: BillingCycle): number {
+  const key = billingCycle === BillingCycle.YEARLY ? 'yearly' : 'monthly';
+  return PLAN_PRICES_TRY[plan][key];
 }
 
 // ── POST /api/billing/payment/init ───────────────────────────────────────────
@@ -186,6 +195,161 @@ export async function upgradeSubscription(req: AuthRequest, res: Response): Prom
   } catch (err: any) {
     logger.error({ message: 'upgradeSubscription error', error: err?.message });
     res.status(400).json({ success: false, message: err?.message || 'Yükseltme yapılamadı.' });
+  }
+}
+
+// ── POST /api/billing/subscription/upgrade/stripe-checkout ───────────────────
+export async function createStripeUpgradeCheckout(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!stripe) {
+      res.status(503).json({ success: false, message: 'Stripe yapılandırılmamış.' });
+      return;
+    }
+
+    const { userId, tenantId } = req.user!;
+    const { plan, billingCycle = 'MONTHLY' } = req.body ?? {};
+
+    if (!plan || !Object.values(Plan).includes(plan)) {
+      res.status(400).json({ success: false, message: 'Geçersiz plan.' });
+      return;
+    }
+    if (plan === Plan.STARTER) {
+      res.status(400).json({ success: false, message: 'Starter plan ücretsizdir.' });
+      return;
+    }
+    if (!Object.values(BillingCycle).includes(billingCycle)) {
+      res.status(400).json({ success: false, message: 'Geçersiz fatura döngüsü.' });
+      return;
+    }
+
+    const amountTry = getPlanPrice(plan as Plan, billingCycle as BillingCycle);
+    const interval = billingCycle === BillingCycle.YEARLY ? 'year' : 'month';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      success_url: `${frontendUrl}/payment-result?status=success&source=stripe`,
+      cancel_url: `${frontendUrl}/plans?status=cancelled`,
+      payment_method_types: ['card'],
+      client_reference_id: `${tenantId}:${userId}`,
+      metadata: {
+        tenantId,
+        userId,
+        plan,
+        billingCycle,
+      },
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'try',
+          unit_amount: Math.round(amountTry * 100),
+          recurring: { interval },
+          product_data: {
+            name: `Woontegra ${plan} (${interval === 'year' ? 'Yıllık' : 'Aylık'})`,
+          },
+        },
+      }],
+    });
+
+    res.json({
+      success: true,
+      data: { checkoutUrl: session.url },
+    });
+  } catch (err: any) {
+    logger.error({ message: 'createStripeUpgradeCheckout error', error: err?.message });
+    res.status(500).json({ success: false, message: err?.message || 'Stripe checkout başlatılamadı.' });
+  }
+}
+
+// ── POST /api/billing/stripe/webhook ─────────────────────────────────────────
+export async function stripeWebhook(req: Request, res: Response): Promise<void> {
+  try {
+    if (!stripe) {
+      res.status(503).json({ success: false, message: 'Stripe yapılandırılmamış.' });
+      return;
+    }
+    const signature = req.headers['stripe-signature'] as string | undefined;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!signature || !webhookSecret) {
+      res.status(400).json({ success: false, message: 'Stripe webhook secret/signature missing.' });
+      return;
+    }
+
+    const event = stripe.webhooks.constructEvent(req.body as Buffer, signature, webhookSecret);
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const metadata = session.metadata || {};
+      const tenantId = metadata.tenantId;
+      const userId = metadata.userId;
+      const plan = metadata.plan as Plan | undefined;
+      const cycle = (metadata.billingCycle as BillingCycle | undefined) || BillingCycle.MONTHLY;
+
+      if (tenantId && userId && plan) {
+        const existingPayment = await prisma.payment.findFirst({
+          where: { transactionId: session.id },
+          select: { id: true },
+        });
+
+        if (!existingPayment) {
+          const now = new Date();
+          const endDate = new Date(now);
+          if (cycle === BillingCycle.YEARLY) endDate.setFullYear(endDate.getFullYear() + 1);
+          else endDate.setMonth(endDate.getMonth() + 1);
+
+          await prisma.$transaction(async (tx) => {
+            await tx.subscription.updateMany({
+              where: { tenantId, status: 'ACTIVE' },
+              data: { status: 'CANCELED', canceledAt: now },
+            });
+
+            const subscription = await tx.subscription.create({
+              data: {
+                tenantId,
+                userId,
+                plan,
+                billingCycle: cycle,
+                status: 'ACTIVE',
+                startDate: now,
+                endDate,
+              },
+            });
+
+            await tx.payment.create({
+              data: {
+                tenantId,
+                subscriptionId: subscription.id,
+                userId,
+                amount: getPlanPrice(plan, cycle),
+                currency: 'TRY',
+                status: 'SUCCESS',
+                provider: 'stripe',
+                transactionId: session.id,
+                metadata: {
+                  stripeSessionId: session.id,
+                  stripeCustomerId: session.customer,
+                  stripeSubscriptionId: session.subscription,
+                },
+              },
+            });
+
+            await tx.user.update({
+              where: { id: userId },
+              data: { plan },
+            });
+            await tx.tenant.update({
+              where: { id: tenantId },
+              data: { isActive: true, status: 'ACTIVE' },
+            });
+          });
+        }
+      }
+    }
+
+    res.json({ received: true });
+  } catch (err: any) {
+    logger.error({ message: 'stripeWebhook error', error: err?.message });
+    res.status(400).json({ success: false, message: err?.message || 'Stripe webhook failed.' });
   }
 }
 

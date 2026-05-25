@@ -1,7 +1,21 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, TenantUsageAction } from '@prisma/client';
 import prisma from '../../config/database';
+import { logTenantUsage } from '../../services/tenantUsageLog.service';
 import { CouponService, calcDiscount } from '../coupons/coupon.service';
 import { CampaignService, CartItem as CampaignCartItem } from '../campaigns/campaign.service';
+import {
+  shouldSendBankTransferPaymentApproved,
+  shouldSendCustomerStatusEmail,
+} from '../email/templates/store-email.util';
+import {
+  initialOrderPaymentStatus,
+  resolveOrderPaymentProvider,
+} from './order-payment.util';
+import { normalizeShippingInput, type OrderShippingInput } from './order-shipping.util';
+import type { OrderPaymentStatus, PaymentProviderType } from '@prisma/client';
+import { storeEmailService } from '../store-public/store-email.service';
+import type { OrderListQuery } from './order-list.query';
+import { buildOrderListWhere } from './order-list.util';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -18,14 +32,28 @@ export interface CreateOrderDto {
   notes?:      string;
   currency?:   string;
   couponCode?: string;   // optional — applied during order creation
+  /** Kargo ücreti — sunucuda hesaplanır, vitrin siparişlerinde zorunlu doğrulama */
+  shippingPrice?: number;
+  /** Kapıda ödeme vb. ek ücretler */
+  extraFees?: number;
+  paymentProvider?: PaymentProviderType;
+  paymentStatus?: OrderPaymentStatus;
 }
 
 export interface GetAllOrdersQuery {
-  page?:   number;
-  limit?:  number;
-  status?: string;
-  search?: string;
+  page?:             number;
+  limit?:            number;
+  status?:           string;
+  search?:           string;
+  paymentProvider?:  PaymentProviderType;
+  paymentStatus?:    OrderPaymentStatus;
 }
+
+/** Sipariş durumu güncellemesi — müşteri e-postası isteğe bağlı (admin vs ödeme callback). */
+export type OrderStatusUpdateOptions = {
+  /** true: admin vb. kaynaklı geçişlerde STORE_ORDER_STATUS_UPDATED; false: PayTR callback vb. */
+  notifyCustomer?: boolean;
+};
 
 // ── Prisma includes ────────────────────────────────────────────────────────
 
@@ -42,6 +70,11 @@ const ORDER_INCLUDE = {
   },
   coupon: {
     select: { id: true, code: true, discountType: true, value: true },
+  },
+  paymentSessions: {
+    select: { id: true, provider: true, status: true, createdAt: true },
+    orderBy: { createdAt: 'desc' as const },
+    take:    1,
   },
 } satisfies Prisma.OrderInclude;
 
@@ -179,29 +212,19 @@ export class OrderService {
   // ── List ────────────────────────────────────────────────────────────────
 
   async getAll(tenantId: string, query: GetAllOrdersQuery = {}) {
-    const { page = 1, limit = 20, status, search } = query;
+    const { page = 1, limit = 20 } = query;
     const skip = (Number(page) - 1) * Number(limit);
 
-    const where: Prisma.OrderWhereInput = { tenantId };
+    const listQuery: OrderListQuery = {
+      page:   Number(page),
+      limit:  Number(limit),
+      ...(query.status ? { status: query.status.toUpperCase() as OrderListQuery['status'] } : {}),
+      ...(query.search ? { search: query.search } : {}),
+      ...(query.paymentProvider ? { paymentProvider: query.paymentProvider } : {}),
+      ...(query.paymentStatus ? { paymentStatus: query.paymentStatus } : {}),
+    };
 
-    if (status) {
-      where.status = status.toUpperCase() as any;
-    }
-
-    if (search?.trim()) {
-      where.OR = [
-        { orderNumber: { contains: search, mode: 'insensitive' } },
-        {
-          customer: {
-            OR: [
-              { firstName: { contains: search, mode: 'insensitive' } },
-              { lastName:  { contains: search, mode: 'insensitive' } },
-              { email:     { contains: search, mode: 'insensitive' } },
-            ],
-          },
-        },
-      ];
-    }
+    const where = buildOrderListWhere(tenantId, listQuery);
 
     const [total, orders] = await prisma.$transaction([
       prisma.order.count({ where }),
@@ -234,7 +257,17 @@ export class OrderService {
   // ── Create ───────────────────────────────────────────────────────────────
 
   async create(data: CreateOrderDto, tenantId: string) {
-    const { customerId, items, notes, currency = 'TRY', couponCode } = data;
+    const {
+      customerId,
+      items,
+      notes,
+      currency = 'TRY',
+      couponCode,
+      shippingPrice = 0,
+      extraFees = 0,
+      paymentProvider,
+      paymentStatus,
+    } = data;
 
     if (!items?.length) {
       throw new Error('En az bir ürün eklenmelidir.');
@@ -307,7 +340,7 @@ export class OrderService {
       couponDiscount = validation.discountAmount;
     }
 
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 1. Deduct stock — throws StockError on failure
       await deductStock(tx, items, tenantId);
 
@@ -336,7 +369,9 @@ export class OrderService {
       }
 
       const totalDiscount = campaignDiscount + couponDiscount;
-      const totalAmount   = Math.max(0, subtotal - totalDiscount);
+      const shipping      = Math.max(0, Number(shippingPrice) || 0);
+      const extras        = Math.max(0, Number(extraFees) || 0);
+      const totalAmount   = Math.max(0, subtotal - totalDiscount + shipping + extras);
       const orderNumber   = `ORD-${Date.now()}`;
 
       // 3. Create the order + items (with per-item discount amounts)
@@ -344,11 +379,15 @@ export class OrderService {
         data: {
           orderNumber,
           totalAmount,
+          shippingPrice:    shipping,
           discountAmount:   couponDiscount,
           campaignDiscount,
           currency,
           notes,
           status:   'PENDING',
+          ...(paymentProvider ? { paymentProvider } : {}),
+          paymentStatus: paymentStatus
+            ?? (paymentProvider ? initialOrderPaymentStatus(paymentProvider) : 'PENDING'),
           tenant:   { connect: { id: tenantId } },
           customer: { connect: { id: customerId } },
           ...(couponId ? { coupon: { connect: { id: couponId } } } : {}),
@@ -383,16 +422,24 @@ export class OrderService {
         appliedCampaigns: campaignResult.discounts ?? [],
       };
     });
+
+    logTenantUsage(tenantId, TenantUsageAction.ORDER_CREATE);
+    return result;
   }
 
   // ── Update Status ─────────────────────────────────────────────────────────
 
-  async updateStatus(id: string, newStatus: string, tenantId: string) {
-    return prisma.$transaction(async (tx) => {
+  async updateStatus(
+    id: string,
+    newStatus: string,
+    tenantId: string,
+    options?: OrderStatusUpdateOptions,
+  ) {
+    const { order, oldStatus } = await prisma.$transaction(async (tx) => {
       // Fetch current order — fail fast if not found / wrong tenant
       const existing = await tx.order.findFirst({
         where:  { id, tenantId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, shippedAt: true },
       });
 
       if (!existing) {
@@ -427,12 +474,70 @@ export class OrderService {
       // For all other transitions (PENDING → PAID → SHIPPED → DELIVERED)
       // stock is not touched; it was already reserved on creation.
 
-      return tx.order.update({
+      const statusData: Prisma.OrderUpdateInput = { status: newStatus as any };
+      if (newStatus === 'SHIPPED' && !existing.shippedAt) {
+        statusData.shippedAt = new Date();
+      }
+
+      const order = await tx.order.update({
         where:   { id },
-        data:    { status: newStatus as any },
+        data:    statusData,
         include: ORDER_INCLUDE,
       });
+
+      return { order, oldStatus };
     });
+
+    if (options?.notifyCustomer === true) {
+      const paymentProvider = resolveOrderPaymentProvider(order);
+      if (shouldSendBankTransferPaymentApproved(paymentProvider, oldStatus, newStatus, {
+        bankTransferApprovedEmailSentAt: order.bankTransferApprovedEmailSentAt,
+        paymentStatus:                   order.paymentStatus,
+      })) {
+        void storeEmailService.notifyBankTransferPaymentApproved(tenantId, id, { newStatus });
+      } else if (
+        shouldSendCustomerStatusEmail(true, oldStatus, newStatus, paymentProvider, {
+          shippingNotificationSentAt: order.shippingNotificationSentAt,
+        })
+      ) {
+        void storeEmailService.notifyOrderStatusUpdated(tenantId, id, oldStatus, newStatus);
+      }
+    }
+
+    return order;
+  }
+
+  // ── Shipping info (admin) ─────────────────────────────────────────────────
+
+  async updateShipping(
+    id: string,
+    tenantId: string,
+    input: OrderShippingInput & { markAsShipped?: boolean },
+  ) {
+    const shipping = normalizeShippingInput(input);
+
+    const existing = await prisma.order.findFirst({
+      where: { id, tenantId },
+      select: { id: true, status: true },
+    });
+
+    if (!existing) {
+      throw new Error('Sipariş bulunamadı veya bu tenant\'a ait değil.');
+    }
+
+    await prisma.order.update({
+      where: { id },
+      data:  shipping,
+    });
+
+    if (input.markAsShipped) {
+      if (existing.status === 'SHIPPED') {
+        return this.getById(id, tenantId);
+      }
+      return this.updateStatus(id, 'SHIPPED', tenantId, { notifyCustomer: true });
+    }
+
+    return this.getById(id, tenantId);
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────

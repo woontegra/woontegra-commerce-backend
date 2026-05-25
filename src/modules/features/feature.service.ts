@@ -41,14 +41,30 @@ export class FeatureService {
     logger.info({ message: `[FeatureService] Synced ${DEFAULT_FEATURES.length} feature definitions` });
   }
 
-  /** Returns the active plan for a tenant (defaults to STARTER if no active sub) */
-  async getTenantPlan(tenantId: string): Promise<'STARTER' | 'PRO' | 'ENTERPRISE'> {
+  /** Returns the active plan for a tenant (checks Subscription first, then User.plan) */
+  async getTenantPlan(tenantId: string, userId?: string): Promise<'STARTER' | 'PRO' | 'ENTERPRISE'> {
+    // 1. Check Subscription table first
     const sub = await prisma.subscription.findFirst({
       where:   { tenantId, status: 'ACTIVE' },
       orderBy: { createdAt: 'desc' },
       select:  { plan: true },
     });
-    return (sub?.plan as 'STARTER' | 'PRO' | 'ENTERPRISE') ?? 'STARTER';
+    if (sub?.plan) {
+      return sub.plan as 'STARTER' | 'PRO' | 'ENTERPRISE';
+    }
+    
+    // 2. If no subscription, check User.plan
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { plan: true },
+      });
+      if (user?.plan) {
+        return user.plan as 'STARTER' | 'PRO' | 'ENTERPRISE';
+      }
+    }
+    
+    return 'STARTER';
   }
 
   /** Returns the feature keys included in a plan */

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '../../config/logger';
+import { appLogger } from '../logging/loggers';
 
 export class AppError extends Error {
   statusCode: number;
@@ -23,16 +23,21 @@ export const errorHandler = (
   const code       = err instanceof AppError ? err.code       : 'INTERNAL_SERVER_ERROR';
   const message    = err.message || 'Internal Server Error';
 
-  logger.error('Error occurred', {
+  const user = (req as Request & { user?: { userId?: string; tenantId?: string } }).user;
+
+  appLogger.error({
+    action:     'http_error',
+    status:     'failure',
     message,
     statusCode,
-    method: req.method,
-    url:    req.url,
-    ip:     req.ip,
-    stack:  err.stack,
+    code,
+    method:     req.method,
+    path:       req.path,
+    tenantId:   user?.tenantId ?? null,
+    userId:     user?.userId ?? null,
+    error:      err,
   });
 
-  // Guard: if headers already sent (streaming responses) skip sending
   if (res.headersSent) return;
 
   res.status(statusCode).json({

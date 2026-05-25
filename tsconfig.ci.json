@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": [
+    "src/modules/trendyol/trendyol-price.util.ts",
+    "src/modules/trendyol/trendyol-payload.util.ts",
+    "src/modules/billing/billing-activation.util.ts",
+    "src/common/logging/normalize.ts",
+    "src/common/logging/trace-context.ts",
+    "src/common/logging/business-events.ts"
+  ]
+}

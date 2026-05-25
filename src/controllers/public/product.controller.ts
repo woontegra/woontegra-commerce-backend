@@ -1,9 +1,15 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { ApiAuthRequest } from '../../middleware/apiAuth.middleware';
-
-const prisma = new PrismaClient();
+import prisma from '../../config/database';
+import { AppError } from '../../common/middleware/AppError';
+import {
+  checkProductLimit,
+  PLAN_LIMIT_EXCEEDED,
+  PLAN_LIMIT_EXCEEDED_MESSAGE,
+} from '../../services/planQuota.service';
+import { generateUniqueProductSlug } from '../../common/utils/slug.utils';
 
 // Schema validation
 const createProductSchema = z.object({
@@ -170,12 +176,29 @@ export const getProduct = async (req: ApiAuthRequest, res: Response) => {
 
 export const createProduct = async (req: ApiAuthRequest, res: Response) => {
   try {
+    const tenantId = req.apiToken?.tenantId;
+    if (!tenantId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized', code: 'MISSING_TENANT' });
+    }
+
     const validatedData = createProductSchema.parse(req.body);
 
-    // Check if SKU already exists
+    try {
+      await checkProductLimit(tenantId, 1);
+    } catch (e) {
+      if (e instanceof AppError && e.code === PLAN_LIMIT_EXCEEDED) {
+        return res.status(403).json({
+          success: false,
+          code:    PLAN_LIMIT_EXCEEDED,
+          error:   PLAN_LIMIT_EXCEEDED_MESSAGE,
+        });
+      }
+      throw e;
+    }
+
     if (validatedData.sku) {
-      const existingProduct = await prisma.product.findUnique({
-        where: { sku: validatedData.sku },
+      const existingProduct = await prisma.product.findFirst({
+        where: { sku: validatedData.sku, tenantId },
       });
 
       if (existingProduct) {
@@ -186,11 +209,50 @@ export const createProduct = async (req: ApiAuthRequest, res: Response) => {
       }
     }
 
+    const slug  = await generateUniqueProductSlug(validatedData.name, tenantId);
+    const price = new Prisma.Decimal(validatedData.price);
+
     const product = await prisma.product.create({
       data: {
-        ...validatedData,
-        createdBy: req.apiToken?.creator.id,
-        createdAt: new Date(),
+        name:        validatedData.name,
+        slug,
+        description: validatedData.description ?? null,
+        price,
+        sku:         validatedData.sku ?? null,
+        tenantId,
+        images:      validatedData.images ?? [],
+        status:      validatedData.status,
+        isActive:    validatedData.status === 'active',
+        categoryId:  validatedData.categoryId ?? null,
+        basePrice:   validatedData.compareAtPrice != null
+          ? new Prisma.Decimal(validatedData.compareAtPrice)
+          : null,
+        pricing: {
+          create: {
+            salePrice:     price,
+            discountPrice: null,
+            vatRate:       new Prisma.Decimal(18),
+            currency:      'TRY',
+          },
+        },
+        ...(validatedData.weight != null || validatedData.dimensions
+          ? {
+              shipping: {
+                create: {
+                  ...(validatedData.weight != null
+                    ? { weight: new Prisma.Decimal(validatedData.weight) }
+                    : {}),
+                  ...(validatedData.dimensions
+                    ? {
+                        length: new Prisma.Decimal(validatedData.dimensions.length),
+                        width:  new Prisma.Decimal(validatedData.dimensions.width),
+                        height: new Prisma.Decimal(validatedData.dimensions.height),
+                      }
+                    : {}),
+                },
+              },
+            }
+          : {}),
       },
       include: {
         category: {
@@ -199,15 +261,16 @@ export const createProduct = async (req: ApiAuthRequest, res: Response) => {
             name: true,
           },
         },
+        pricing: true,
       },
     });
 
-    // Create stock record
     if (validatedData.stock > 0) {
       await prisma.stock.create({
         data: {
           productId: product.id,
-          quantity: validatedData.stock,
+          tenantId,
+          quantity:  new Prisma.Decimal(validatedData.stock),
           updatedAt: new Date(),
         },
       });
@@ -228,6 +291,7 @@ export const createProduct = async (req: ApiAuthRequest, res: Response) => {
         targetName: product.name,
         status: 'success',
         timestamp: new Date(),
+        tenant: { connect: { id: tenantId } },
       },
     });
 

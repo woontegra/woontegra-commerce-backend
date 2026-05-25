@@ -10,6 +10,7 @@
 
 import prisma from '../../../../config/database';
 import { logger } from '../../../../config/logger';
+import { decryptTrendyolCredentials } from '../../../../common/crypto/marketplace-credential.crypto';
 import { getMarketplaceProvider, KNOWN_MARKETPLACE_SLUGS } from '../../factory/MarketplaceFactory';
 import {
   IMarketplaceProvider,
@@ -64,12 +65,13 @@ async function resolveCredentials(tenantId: string, slug: string): Promise<Provi
       throw new Error('Aktif Trendyol entegrasyonu bulunamadı. Lütfen API bilgilerini girin.');
     }
 
+    const creds = decryptTrendyolCredentials(integration);
     return {
       tenantId,
       credentials: {
-        apiKey:    integration.apiKey,
-        apiSecret: integration.apiSecret,
-        sellerId:  integration.supplierId,
+        apiKey:    creds.apiKey,
+        apiSecret: creds.apiSecret,
+        sellerId:  creds.sellerId,
       },
     };
   }

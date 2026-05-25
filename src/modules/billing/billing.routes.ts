@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import express from 'express';
-import { authenticate } from '../../common/middleware/authEnhanced';
+import { authenticate, forbidWhenImpersonating } from '../../common/middleware/authEnhanced';
 import {
   initPayment,
   paymentCallback,
@@ -13,6 +13,8 @@ import {
   downgradeSubscription,
   getInvoices,
   getInvoiceById,
+  createStripeUpgradeCheckout,
+  stripeWebhook,
 } from './billing.controller';
 
 const router = Router();
@@ -42,14 +44,21 @@ router.post(
   paymentWebhook,
 );
 
+router.post(
+  '/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  stripeWebhook,
+);
+
 // ── Protected: payment init & subscription management ───────────────────────
 router.use(authenticate);
 
-router.post('/payment/init',          initPayment);
+router.post('/payment/init',          forbidWhenImpersonating, initPayment);
 router.get('/subscription',           getSubscription);
-router.post('/subscription/cancel',   cancelSubscription);
-router.post('/subscription/upgrade',  upgradeSubscription);
-router.post('/subscription/downgrade',downgradeSubscription);
+router.post('/subscription/cancel',   forbidWhenImpersonating, cancelSubscription);
+router.post('/subscription/upgrade',  forbidWhenImpersonating, upgradeSubscription);
+router.post('/subscription/upgrade/stripe-checkout', forbidWhenImpersonating, createStripeUpgradeCheckout);
+router.post('/subscription/downgrade',forbidWhenImpersonating, downgradeSubscription);
 router.get('/history',                getBillingHistory);
 router.get('/invoices',               getInvoices);
 router.get('/invoices/:id',           getInvoiceById);

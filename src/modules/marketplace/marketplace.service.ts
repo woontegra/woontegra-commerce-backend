@@ -1,6 +1,9 @@
 import { PrismaClient, MarketplaceProvider, MarketplaceSyncStatus, SyncType } from '@prisma/client';
 import { TrendyolClient, TrendyolCredentials } from './clients/trendyol.client';
-import crypto from 'crypto';
+import {
+  decryptCredential,
+  encryptCredential,
+} from '../../common/crypto/marketplace-credential.crypto';
 
 export interface ConnectMarketplaceData {
   provider: MarketplaceProvider;
@@ -36,8 +39,8 @@ export class MarketplaceService {
       }
 
       // Encrypt sensitive data
-      const encryptedApiKey = this.encrypt(data.apiKey);
-      const encryptedApiSecret = this.encrypt(data.apiSecret);
+      const encryptedApiKey = encryptCredential(data.apiKey);
+      const encryptedApiSecret = encryptCredential(data.apiSecret);
 
       // Check if account already exists
       const existingAccount = await this.prisma.marketplaceAccount.findFirst({
@@ -437,32 +440,10 @@ export class MarketplaceService {
 
   private decryptCredentials(account: any): TrendyolCredentials {
     return {
-      apiKey: this.decrypt(account.apiKey),
-      apiSecret: this.decrypt(account.apiSecret),
+      apiKey: decryptCredential(account.apiKey),
+      apiSecret: decryptCredential(account.apiSecret),
       sellerId: account.sellerId,
     };
-  }
-
-  private encrypt(text: string): string {
-    const algorithm = 'aes-256-cbc';
-    const key = crypto.scryptSync(process.env.MARKETPLACE_ENCRYPTION_KEY || 'default-key', 'salt', 32);
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv(algorithm, key, iv);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return iv.toString('hex') + ':' + encrypted;
-  }
-
-  private decrypt(encryptedText: string): string {
-    const algorithm = 'aes-256-cbc';
-    const key = crypto.scryptSync(process.env.MARKETPLACE_ENCRYPTION_KEY || 'default-key', 'salt', 32);
-    const parts = encryptedText.split(':');
-    const iv = Buffer.from(parts[0], 'hex');
-    const encrypted = parts[1];
-    const decipher = crypto.createDecipheriv(algorithm, key, iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
   }
 
   private mapProductAttributes(product: any): Record<string, any> {

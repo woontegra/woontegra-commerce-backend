@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { TrendyolClient } from '../marketplace/clients/trendyol.client';
 import { logger } from '../../config/logger';
+import { decryptTrendyolCredentials } from '../../common/crypto/marketplace-credential.crypto';
 
 export interface OrderSyncResult {
   synced:  number;
@@ -26,10 +27,11 @@ export class TrendyolOrderSyncService {
 
     if (!integration) throw new Error('Aktif Trendyol entegrasyonu bulunamadı.');
 
+    const creds = decryptTrendyolCredentials(integration);
     const client = new TrendyolClient({
-      apiKey:    integration.apiKey,
-      apiSecret: integration.apiSecret,
-      sellerId:  integration.supplierId,
+      apiKey:    creds.apiKey,
+      apiSecret: creds.apiSecret,
+      sellerId:  creds.sellerId,
     });
 
     // Son sync'ten itibaren ya da son 7 gün

@@ -11,8 +11,7 @@ interface AuthRequest extends Request {
 }
 
 /**
- * SuperAdmin middleware
- * Only allows SUPER_ADMIN role
+ * SuperAdmin middleware — only SUPER_ADMIN (same policy as /api/admin).
  */
 export function requireSuperAdmin(
   req: AuthRequest,
@@ -27,11 +26,7 @@ export function requireSuperAdmin(
       return;
     }
 
-    // Check if user is super admin
-    // Super admin email domain check or specific role
-    const isSuperAdmin = 
-      user.role === 'SUPER_ADMIN' || 
-      user.email.endsWith('@woontegra.com'); // Your domain
+    const isSuperAdmin = String(user.role || '').toUpperCase() === 'SUPER_ADMIN';
 
     if (!isSuperAdmin) {
       logger.warn('[SuperAdmin] Unauthorized access attempt', {
