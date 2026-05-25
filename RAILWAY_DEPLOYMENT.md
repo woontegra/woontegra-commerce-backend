@@ -19,6 +19,8 @@ Railway dashboard'da backend servisine şu environment variable'ları ekle:
 ```
 DATABASE_URL=<PostgreSQL connection string>
 JWT_SECRET=your-super-secret-jwt-key-change-this
+REDIS_URL=<Redis connection string — Railway Redis servisinden reference>
+MARKETPLACE_ENCRYPTION_KEY=<en az 32 karakter rastgele secret — Trendyol/marketplace şifreleme>
 PORT=3000
 NODE_ENV=production
 ```

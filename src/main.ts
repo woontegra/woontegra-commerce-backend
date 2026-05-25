@@ -36,7 +36,6 @@ import adminRoutes from './modules/admin/admin.routes';
 import { tenantLifecycleGuard } from './modules/lifecycle/lifecycle.middleware';
 import { startLifecycleCron } from './modules/lifecycle/lifecycle.cron';
 import { startXmlSourceSyncJob } from './jobs/xml-source-sync.job';
-import { assertMarketplaceEncryptionKeyConfigured } from './common/crypto/marketplace-credential.crypto';
 import featureRoutes from './modules/features/feature.routes';
 import { FeatureService } from './modules/features/feature.service';
 import notificationRoutes from './modules/notifications/notification.routes';
@@ -85,9 +84,15 @@ import { searchService }   from './modules/search/search.service';
 import { initializeQueues, closeQueues } from './queues';
 import { bullBoardRouter } from './queues/bull-board';
 
-assertMarketplaceEncryptionKeyConfigured();
-
 const app: Application = express();
+
+if (config.nodeEnv === 'production' && !process.env.MARKETPLACE_ENCRYPTION_KEY?.trim()) {
+  logger.warn({
+    message:
+      'MARKETPLACE_ENCRYPTION_KEY tanımlı değil — pazaryeri kimlik bilgisi şifreleme devre dışı. ' +
+      'Trendyol / marketplace entegrasyonu için Railway ortam değişkenlerine ekleyin.',
+  });
+}
 
 // Setup graceful shutdown and monitoring
 setupGracefulShutdown();
