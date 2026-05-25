@@ -10,18 +10,15 @@ COPY prisma ./prisma/
 # postinstall will run prisma generate now that schema is available
 RUN npm ci
 
-# Ensure Prisma client is generated
-RUN npx prisma generate
-
 # Copy source and build
 COPY . .
-RUN npm run build || echo "Build warnings ignored"
+# tsc may exit non-zero on type errors but still emit (noEmitOnError: false)
+RUN npm run build; test -f dist/main.js
 
-# Remove dev dependencies after build
+# Remove dev dependencies after build (@prisma/client + prisma stay in dependencies)
 RUN npm prune --omit=dev
 
-# Expose port
 EXPOSE 3000
 
-# Start server
-CMD ["node", "dist/main.js"]
+# Migrate then start — Railway healthcheck hits /health
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

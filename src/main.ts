@@ -274,7 +274,7 @@ new FeatureService().syncFeatureDefinitions().catch((err) =>
 );
 
 // Start server
-const server = app.listen(config.port, async () => {
+const server = app.listen(config.port, '0.0.0.0', async () => {
   // Trendyol fiyat/stok poll işlemleri 2–3 dk sürebilir
   server.setTimeout(600_000);
   server.keepAliveTimeout = 620_000;

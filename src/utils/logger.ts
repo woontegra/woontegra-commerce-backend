@@ -12,6 +12,8 @@ export {
   createModuleLogger,
 } from '../config/logger';
 
+import { logger } from '../config/logger';
+
 export const logInfo = (message: string, meta?: Record<string, unknown>) => {
   logger.info({ action: message, message, ...meta });
 };
