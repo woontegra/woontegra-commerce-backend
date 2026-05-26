@@ -2,6 +2,7 @@
 cmd = "npm ci && npx prisma generate && npm run build"
 
 [deploy]
-startCommand = "npx prisma migrate deploy && node dist/main.js"
+preDeployCommand = "npx prisma migrate deploy"
+startCommand = "node dist/main.js"
 healthcheckPath = "/health"
 restartPolicyType = "always"

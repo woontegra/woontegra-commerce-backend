@@ -1,5 +1,5 @@
-import { Job } from 'bullmq';
-import { createQueue, createWorker, QUEUE_NAMES } from '../config/queue';
+import { Job, Queue, Worker } from 'bullmq';
+import { createQueue, createWorker, isRedisConfigured } from '../config/queue';
 import { logger } from '../config/logger';
 import { PrismaClient } from '@prisma/client';
 import { checkProductLimit, invalidateTenantProductUsageCache } from '../services/planQuota.service';
@@ -30,8 +30,20 @@ export interface BatchProgress {
   errors: Array<{ item: any; error: string }>;
 }
 
-// Create batch queue
-export const batchQueue = createQueue('batch-queue');
+// Create batch queue (lazy — REDIS_URL yoksa startup'ta çökmez)
+let batchQueueInstance: Queue | undefined;
+let batchWorkerInstance: Worker | undefined;
+
+function initBatchQueue(): void {
+  if (batchQueueInstance) return;
+  batchQueueInstance = createQueue('batch-queue');
+  batchWorkerInstance = createWorker('batch-queue', processBatchJob, 2);
+}
+
+function getBatchQueue(): Queue {
+  initBatchQueue();
+  return batchQueueInstance!;
+}
 
 // Batch processor
 async function processBatchJob(job: Job<BatchJobData>): Promise<BatchProgress> {
@@ -247,18 +259,19 @@ async function processBulkImport(item: any, tenantId: string, options?: any): Pr
   }
 }
 
-// Create batch worker
-export const batchWorker = createWorker(
-  'batch-queue',
-  processBatchJob,
-  2 // 2 concurrent batch jobs
-);
+export function initBatchQueueInfrastructure(): void {
+  if (isRedisConfigured()) initBatchQueue();
+}
 
 /**
  * Add batch job to queue
  */
 export async function addBatchJob(data: BatchJobData): Promise<string> {
-  const job = await batchQueue.add('batch-process', data, {
+  if (!isRedisConfigured()) {
+    throw new Error('REDIS_URL tanımlı değil — batch kuyruğu kullanılamıyor.');
+  }
+
+  const job = await getBatchQueue().add('batch-process', data, {
     priority: 3, // Lower priority than regular jobs
   });
 
@@ -279,7 +292,7 @@ export async function getBatchJobStatus(jobId: string): Promise<{
   progress: number;
   result?: BatchProgress;
 }> {
-  const job = await batchQueue.getJob(jobId);
+  const job = await getBatchQueue().getJob(jobId);
 
   if (!job) {
     throw new Error('Batch job not found');

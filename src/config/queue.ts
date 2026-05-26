@@ -2,17 +2,26 @@ import { Queue, Worker, QueueEvents } from 'bullmq';
 import IORedis from 'ioredis';
 import { logger } from './logger';
 
-const redisUrl = process.env.REDIS_URL;
+let redisConnection: IORedis | null = null;
 
-if (!redisUrl) {
-  throw new Error("REDIS_URL tanımlı değil!");
+export function isRedisConfigured(): boolean {
+  return Boolean(process.env.REDIS_URL?.trim());
 }
 
-// ✅ TEK bağlantı - BullMQ requires maxRetriesPerRequest: null
-export const redisConnection = new IORedis(redisUrl, {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-});
+export function getRedisConnection(): IORedis {
+  if (!isRedisConfigured()) {
+    throw new Error('REDIS_URL tanımlı değil!');
+  }
+
+  if (!redisConnection) {
+    redisConnection = new IORedis(process.env.REDIS_URL!.trim(), {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    });
+  }
+
+  return redisConnection;
+}
 
 /**
  * Queue names
@@ -26,25 +35,19 @@ export const QUEUE_NAMES = {
   BATCH: 'batch-queue',
 } as const;
 
-/**
- * Default queue options
- */
-export const defaultQueueOptions = {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential' as const,
-      delay: 2000,
-    },
-    removeOnComplete: {
-      count: 100,
-      age: 24 * 3600,
-    },
-    removeOnFail: {
-      count: 1000,
-      age: 7 * 24 * 3600,
-    },
+const defaultJobOptions = {
+  attempts: 3,
+  backoff: {
+    type: 'exponential' as const,
+    delay: 2000,
+  },
+  removeOnComplete: {
+    count: 100,
+    age: 24 * 3600,
+  },
+  removeOnFail: {
+    count: 1000,
+    age: 7 * 24 * 3600,
   },
 };
 
@@ -52,7 +55,10 @@ export const defaultQueueOptions = {
  * Create queue
  */
 export function createQueue(name: string): Queue {
-  const queue = new Queue(name, defaultQueueOptions);
+  const queue = new Queue(name, {
+    connection: getRedisConnection(),
+    defaultJobOptions,
+  });
   logger.info('[Queue] Created queue', { name });
   return queue;
 }
@@ -63,10 +69,10 @@ export function createQueue(name: string): Queue {
 export function createWorker(
   name: string,
   processor: (job: any) => Promise<any>,
-  concurrency: number = 5
+  concurrency: number = 5,
 ): Worker {
   const worker = new Worker(name, processor, {
-    connection: redisConnection,
+    connection: getRedisConnection(),
     concurrency,
   });
 
@@ -94,6 +100,6 @@ export function createWorker(
  */
 export function createQueueEvents(name: string): QueueEvents {
   return new QueueEvents(name, {
-    connection: redisConnection,
+    connection: getRedisConnection(),
   });
 }

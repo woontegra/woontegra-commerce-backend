@@ -1,5 +1,5 @@
-import { Job } from 'bullmq';
-import { createQueue, createWorker, QUEUE_NAMES } from '../config/queue';
+import { Job, Queue, Worker } from 'bullmq';
+import { createQueue, createWorker, isRedisConfigured, QUEUE_NAMES } from '../config/queue';
 import { WebhookService, WebhookEvent } from '../services/webhook.service';
 import { logger } from '../config/logger';
 
@@ -9,10 +9,9 @@ export interface WebhookJobData {
   data: any;
 }
 
-// Create webhook queue
-export const webhookQueue = createQueue(QUEUE_NAMES.WEBHOOK);
+let webhookQueueInstance: Queue | undefined;
+let webhookWorkerInstance: Worker | undefined;
 
-// Webhook processor
 async function processWebhookJob(job: Job<WebhookJobData>): Promise<void> {
   const { tenantId, event, data } = job.data;
 
@@ -34,31 +33,37 @@ async function processWebhookJob(job: Job<WebhookJobData>): Promise<void> {
   }
 }
 
-// Create webhook worker
-export const webhookWorker = createWorker(
-  QUEUE_NAMES.WEBHOOK,
-  processWebhookJob,
-  10 // 10 concurrent jobs
-);
+export function initWebhookQueue(): void {
+  if (webhookQueueInstance) return;
+  webhookQueueInstance = createQueue(QUEUE_NAMES.WEBHOOK);
+  webhookWorkerInstance = createWorker(QUEUE_NAMES.WEBHOOK, processWebhookJob, 10);
+}
 
-/**
- * Trigger webhook asynchronously
- */
+export function getWebhookQueue(): Queue {
+  initWebhookQueue();
+  return webhookQueueInstance!;
+}
+
+export function getWebhookWorker(): Worker {
+  initWebhookQueue();
+  return webhookWorkerInstance!;
+}
+
 export async function triggerWebhookAsync(
   tenantId: string,
   event: WebhookEvent,
-  data: any
+  data: any,
 ): Promise<void> {
-  await webhookQueue.add('trigger-webhook', {
-    tenantId,
-    event,
-    data,
-  }, {
-    priority: 1,
-  });
+  if (!isRedisConfigured()) {
+    logger.warn('[WebhookQueue] REDIS_URL yok — webhook kuyruğa alınamadı', { tenantId, event });
+    return;
+  }
 
-  logger.info('[WebhookQueue] Webhook job added', {
-    tenantId,
-    event,
-  });
+  await getWebhookQueue().add(
+    'trigger-webhook',
+    { tenantId, event, data },
+    { priority: 1 },
+  );
+
+  logger.info('[WebhookQueue] Webhook job added', { tenantId, event });
 }

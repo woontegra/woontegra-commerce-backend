@@ -1,5 +1,5 @@
-import { Job } from 'bullmq';
-import { createQueue, createWorker, QUEUE_NAMES } from '../config/queue';
+import { Job, Queue, Worker } from 'bullmq';
+import { createQueue, createWorker, isRedisConfigured, QUEUE_NAMES } from '../config/queue';
 import { ImageOptimizationService } from '../services/image-optimization.service';
 import { logger } from '../config/logger';
 
@@ -10,10 +10,9 @@ export interface ImageProcessingJobData {
   category: string;
 }
 
-// Create image processing queue
-export const imageProcessingQueue = createQueue(QUEUE_NAMES.IMAGE_PROCESSING);
+let imageProcessingQueueInstance: Queue | undefined;
+let imageProcessingWorkerInstance: Worker | undefined;
 
-// Image processing processor
 async function processImageJob(job: Job<ImageProcessingJobData>): Promise<any> {
   const { inputPath, outputDir, filename, category } = job.data;
 
@@ -24,15 +23,9 @@ async function processImageJob(job: Job<ImageProcessingJobData>): Promise<any> {
   });
 
   try {
-    // Update progress
     await job.updateProgress(10);
 
-    // Optimize image
-    const result = await ImageOptimizationService.optimizeImage(
-      inputPath,
-      outputDir,
-      filename
-    );
+    const result = await ImageOptimizationService.optimizeImage(inputPath, outputDir, filename);
 
     await job.updateProgress(100);
 
@@ -51,20 +44,35 @@ async function processImageJob(job: Job<ImageProcessingJobData>): Promise<any> {
   }
 }
 
-// Create image processing worker
-export const imageProcessingWorker = createWorker(
-  QUEUE_NAMES.IMAGE_PROCESSING,
-  processImageJob,
-  3 // 3 concurrent jobs (CPU intensive)
-);
+export function initImageProcessingQueue(): void {
+  if (imageProcessingQueueInstance) return;
+  imageProcessingQueueInstance = createQueue(QUEUE_NAMES.IMAGE_PROCESSING);
+  imageProcessingWorkerInstance = createWorker(
+    QUEUE_NAMES.IMAGE_PROCESSING,
+    processImageJob,
+    3,
+  );
+}
 
-/**
- * Process image asynchronously
- */
+export function getImageProcessingQueue(): Queue {
+  initImageProcessingQueue();
+  return imageProcessingQueueInstance!;
+}
+
+export function getImageProcessingWorker(): Worker {
+  initImageProcessingQueue();
+  return imageProcessingWorkerInstance!;
+}
+
 export async function processImageAsync(data: ImageProcessingJobData): Promise<void> {
-  await imageProcessingQueue.add('process-image', data, {
-    priority: 2,
-  });
+  if (!isRedisConfigured()) {
+    logger.warn('[ImageProcessingQueue] REDIS_URL yok — görsel işleme kuyruğa alınamadı', {
+      filename: data.filename,
+    });
+    return;
+  }
+
+  await getImageProcessingQueue().add('process-image', data, { priority: 2 });
 
   logger.info('[ImageProcessingQueue] Image processing job added', {
     filename: data.filename,

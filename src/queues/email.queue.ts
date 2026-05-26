@@ -1,5 +1,5 @@
-import { Job } from 'bullmq';
-import { createQueue, createWorker, QUEUE_NAMES } from '../config/queue';
+import { Job, Queue, Worker } from 'bullmq';
+import { createQueue, createWorker, isRedisConfigured, QUEUE_NAMES } from '../config/queue';
 import { logger } from '../config/logger';
 import { deliverEmail } from '../modules/email/email.provider';
 import { renderEmailTemplate, type TemplateKey } from '../modules/email/templates';
@@ -9,10 +9,8 @@ const EMAIL_JOB_BACKOFF_MS = parseInt(process.env.EMAIL_QUEUE_BACKOFF_MS || '300
 
 export interface EmailJobData {
   to: string;
-  /** Şablon modu */
   template?: TemplateKey;
   templateData?: Record<string, unknown>;
-  /** Ham HTML modu (şablon yok) */
   subject?: string;
   html?: string;
   text?: string;
@@ -23,15 +21,18 @@ export interface EmailJobData {
   }>;
 }
 
+let emailQueueInstance: Queue | undefined;
+let emailWorkerInstance: Worker | undefined;
+
 function resolvePayload(data: EmailJobData): { to: string; subject: string; html: string; text?: string; from?: string } {
   if (data.template) {
     const rendered = renderEmailTemplate(data.template, data.templateData ?? {});
     return {
-      to:      data.to,
+      to: data.to,
       subject: rendered.subject,
-      html:    rendered.html,
-      text:    data.text,
-      from:    data.from,
+      html: rendered.html,
+      text: data.text,
+      from: data.from,
     };
   }
 
@@ -40,24 +41,22 @@ function resolvePayload(data: EmailJobData): { to: string; subject: string; html
   }
 
   return {
-    to:      data.to,
+    to: data.to,
     subject: data.subject,
-    html:    data.html,
-    text:    data.text,
-    from:    data.from,
+    html: data.html,
+    text: data.text,
+    from: data.from,
   };
 }
-
-export const emailQueue = createQueue(QUEUE_NAMES.EMAIL);
 
 async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
   const resolved = resolvePayload(job.data);
 
   logger.info('[EmailQueue] Processing', {
-    jobId:    job.id,
-    attempt:  job.attemptsMade + 1,
-    to:       resolved.to,
-    subject:  resolved.subject,
+    jobId: job.id,
+    attempt: job.attemptsMade + 1,
+    to: resolved.to,
+    subject: resolved.subject,
     template: job.data.template,
   });
 
@@ -68,11 +67,21 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
   await deliverEmail(resolved);
 }
 
-export const emailWorker = createWorker(
-  QUEUE_NAMES.EMAIL,
-  processEmailJob,
-  5,
-);
+export function initEmailQueue(): void {
+  if (emailQueueInstance) return;
+  emailQueueInstance = createQueue(QUEUE_NAMES.EMAIL);
+  emailWorkerInstance = createWorker(QUEUE_NAMES.EMAIL, processEmailJob, 5);
+}
+
+export function getEmailQueue(): Queue {
+  initEmailQueue();
+  return emailQueueInstance!;
+}
+
+export function getEmailWorker(): Worker {
+  initEmailQueue();
+  return emailWorkerInstance!;
+}
 
 const defaultJobOpts = {
   attempts: EMAIL_JOB_ATTEMPTS,
@@ -81,18 +90,23 @@ const defaultJobOpts = {
     delay: EMAIL_JOB_BACKOFF_MS,
   },
   removeOnComplete: { count: 200, age: 24 * 3600 },
-  removeOnFail:       { count: 500, age: 7 * 24 * 3600 },
+  removeOnFail: { count: 500, age: 7 * 24 * 3600 },
 };
 
 export async function sendEmailAsync(data: EmailJobData): Promise<string | undefined> {
-  const job = await emailQueue.add('send-email', data, {
+  if (!isRedisConfigured()) {
+    logger.warn('[EmailQueue] REDIS_URL yok — e-posta kuyruğa alınamadı', { to: data.to });
+    return undefined;
+  }
+
+  const job = await getEmailQueue().add('send-email', data, {
     priority: 1,
     ...defaultJobOpts,
   });
 
   logger.info('[EmailQueue] Job queued', {
     jobId: job.id,
-    to:    data.to,
+    to: data.to,
     template: data.template,
     subject: data.subject,
   });
@@ -101,18 +115,21 @@ export async function sendEmailAsync(data: EmailJobData): Promise<string | undef
 }
 
 export async function sendBulkEmailsAsync(emails: EmailJobData[]): Promise<void> {
-  const jobs = emails.map(email => ({
+  if (!isRedisConfigured()) {
+    logger.warn('[EmailQueue] REDIS_URL yok — toplu e-posta kuyruğa alınamadı', { count: emails.length });
+    return;
+  }
+
+  const jobs = emails.map((email) => ({
     name: 'send-email',
     data: email,
     opts: { priority: 2, ...defaultJobOpts },
   }));
 
-  await emailQueue.addBulk(jobs);
-
+  await getEmailQueue().addBulk(jobs);
   logger.info('[EmailQueue] Bulk jobs queued', { count: emails.length });
 }
 
-/** Şablonlu kuyruk kısayolları */
 export async function queuePasswordResetEmail(
   to: string,
   data: { resetUrl: string; userName?: string; expiresInMinutes?: number },
@@ -124,10 +141,7 @@ export async function queuePasswordResetEmail(
   });
 }
 
-export async function queueSubscriptionEmail(
-  to: string,
-  data: Record<string, unknown>,
-) {
+export async function queueSubscriptionEmail(to: string, data: Record<string, unknown>) {
   return sendEmailAsync({
     to,
     template: 'SUBSCRIPTION_NOTIFICATION',
@@ -135,10 +149,7 @@ export async function queueSubscriptionEmail(
   });
 }
 
-export async function queueErrorAlertEmail(
-  to: string,
-  data: Record<string, unknown>,
-) {
+export async function queueErrorAlertEmail(to: string, data: Record<string, unknown>) {
   return sendEmailAsync({
     to,
     template: 'ERROR_ALERT',

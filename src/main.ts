@@ -82,9 +82,16 @@ import leadRoutes               from './modules/leads/lead.routes';
 import { pingMeilisearch } from './config/meilisearch';
 import { searchService }   from './modules/search/search.service';
 import { initializeQueues, closeQueues } from './queues';
-import { bullBoardRouter } from './queues/bull-board';
+import { isRedisConfigured } from './config/queue';
 
 const app: Application = express();
+
+logger.info({
+  message: 'Boot configuration',
+  port: config.port,
+  nodeEnv: config.nodeEnv,
+  redisConfigured: isRedisConfigured(),
+});
 
 if (config.nodeEnv === 'production' && !process.env.MARKETPLACE_ENCRYPTION_KEY?.trim()) {
   logger.warn({
@@ -237,7 +244,6 @@ app.use('/api/superadmin',      superAdminRoutes); // Auth + SuperAdmin middlewa
 app.use('/api/invoices',        authenticate, invoiceRoutes); // Auth inside router
 app.use('/api/stock-sync',      authenticate, stockSyncRoutes); // Auth inside router
 app.use('/api/leads',           leadRoutes);
-app.use('/admin/queues', authenticate, bullBoardRouter); // Bull Board dashboard
 app.use('/api/reports',  reportsRoutes);   // authenticate is applied inside the router
 // Static uploads — Cross-Origin-Resource-Policy must be "cross-origin" so the
 // frontend (localhost:5173) can load images served by the API (localhost:3000).
@@ -299,8 +305,12 @@ const server = app.listen(config.port, '0.0.0.0', async () => {
     timestamp: new Date().toISOString(),
   });
 
-  // Initialize queues
+  // Initialize queues (optional — requires REDIS_URL)
   await initializeQueues();
+  if (isRedisConfigured()) {
+    const { createBullBoardRouter } = await import('./queues/bull-board');
+    app.use('/admin/queues', authenticate, createBullBoardRouter());
+  }
 });
 
 // Handle server errors

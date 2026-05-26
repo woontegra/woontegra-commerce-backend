@@ -1,23 +1,23 @@
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
-import { emailQueue } from './email.queue';
-import { webhookQueue } from './webhook.queue';
-import { imageProcessingQueue } from './image-processing.queue';
+import type { Router } from 'express';
+import { getEmailQueue } from './email.queue';
+import { getWebhookQueue } from './webhook.queue';
+import { getImageProcessingQueue } from './image-processing.queue';
 
-/**
- * Bull Board - Queue Dashboard
- */
-const serverAdapter = new ExpressAdapter();
-serverAdapter.setBasePath('/admin/queues');
+export function createBullBoardRouter(): Router {
+  const serverAdapter = new ExpressAdapter();
+  serverAdapter.setBasePath('/admin/queues');
 
-createBullBoard({
-  queues: [
-    new BullMQAdapter(emailQueue),
-    new BullMQAdapter(webhookQueue),
-    new BullMQAdapter(imageProcessingQueue),
-  ],
-  serverAdapter,
-});
+  createBullBoard({
+    queues: [
+      new BullMQAdapter(getEmailQueue()),
+      new BullMQAdapter(getWebhookQueue()),
+      new BullMQAdapter(getImageProcessingQueue()),
+    ],
+    serverAdapter,
+  });
 
-export const bullBoardRouter = serverAdapter.getRouter();
+  return serverAdapter.getRouter();
+}

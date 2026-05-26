@@ -1,5 +1,7 @@
 FROM node:20-alpine
 
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 # Copy package files and prisma schema first
@@ -20,5 +22,4 @@ RUN npm prune --omit=dev
 
 EXPOSE 3000
 
-# Migrate then start — Railway healthcheck hits /health
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["node", "dist/main.js"]
