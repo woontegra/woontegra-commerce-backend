@@ -54,10 +54,22 @@ export const getSettings = async (req: AuthRequest, res: Response): Promise<void
     const prisma = new PrismaClient();
     const tenant = await prisma.tenant.findUnique({
       where:  { id: req.user!.tenantId! },
-      select: { customDomain: true, domainVerified: true, subdomain: true },
+      select: { slug: true, customDomain: true, domainVerified: true, subdomain: true },
     });
     await prisma.$disconnect();
-    res.json({ success: true, data: { ...settings, ...tenant } });
+
+    const slugTrim = tenant?.slug?.trim() || null;
+    const subTrim  = tenant?.subdomain?.trim() || null;
+    const storefrontSlug = slugTrim || subTrim || null;
+
+    res.json({
+      success: true,
+      data: {
+        ...settings,
+        ...tenant,
+        storefrontSlug,
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
