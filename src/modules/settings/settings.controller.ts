@@ -54,7 +54,10 @@ export const getSettings = async (req: AuthRequest, res: Response): Promise<void
     const prisma = new PrismaClient();
     const tenant = await prisma.tenant.findUnique({
       where:  { id: req.user!.tenantId! },
-      select: { slug: true, customDomain: true, domainVerified: true, subdomain: true },
+      select: {
+        name: true, slug: true, description: true, logoUrl: true, themeConfig: true,
+        customDomain: true, domainVerified: true, subdomain: true,
+      },
     });
     await prisma.$disconnect();
 
@@ -62,12 +65,36 @@ export const getSettings = async (req: AuthRequest, res: Response): Promise<void
     const subTrim  = tenant?.subdomain?.trim() || null;
     const storefrontSlug = slugTrim || subTrim || null;
 
+    const themeRoot = tenant?.themeConfig && typeof tenant.themeConfig === 'object'
+      ? (tenant.themeConfig as Record<string, unknown>)
+      : {};
+    const contact = themeRoot.contact && typeof themeRoot.contact === 'object'
+      ? (themeRoot.contact as Record<string, unknown>)
+      : {};
+
+    const tenantName = tenant?.name?.trim() || '';
+    const settingsSiteName = settings.siteName?.trim() || '';
+    const effectiveSiteName =
+      tenantName
+      || (settingsSiteName !== 'My Store' ? settingsSiteName : '')
+      || settingsSiteName;
+
     res.json({
       success: true,
       data: {
         ...settings,
-        ...tenant,
+        siteName:         effectiveSiteName,
+        slug:             tenant?.slug ?? null,
+        subdomain:        tenant?.subdomain ?? null,
+        customDomain:     tenant?.customDomain ?? null,
+        domainVerified:   tenant?.domainVerified ?? false,
         storefrontSlug,
+        storeName:        tenantName || effectiveSiteName,
+        description:      tenant?.description ?? '',
+        contactEmail:     typeof contact.email === 'string' ? contact.email : '',
+        contactPhone:     typeof contact.phone === 'string' ? contact.phone : '',
+        contactAddress:   typeof contact.address === 'string' ? contact.address : '',
+        tenantLogoUrl:    tenant?.logoUrl ?? null,
       },
     });
   } catch (err: any) {
@@ -94,6 +121,41 @@ export const updateSettings = async (req: AuthRequest, res: Response): Promise<v
     res.json({ success: true, data: settings });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── PUT /api/settings/store-info ─────────────────────────────────────────────
+
+export const updateStoreInfo = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const tenantId = req.user!.tenantId!;
+    const result = await settingsService.updateStoreInfo(tenantId, req.body ?? {});
+
+    await auditService.log({
+      userId: req.user!.id, userEmail: req.user!.email, userRole: req.user!.role,
+      tenantId,
+      action: 'SETTINGS_UPDATED', category: AuditCategory.GENERAL,
+      targetType: 'Tenant', targetId: tenantId,
+      details: { section: 'store-info' },
+      req,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...result,
+        siteName:     result.storeName,
+        storeName:    result.storeName,
+        logoUrl:      result.logoUrl,
+        tenantLogoUrl: result.logoUrl,
+        description:  result.description,
+        contactEmail:   result.contactEmail,
+        contactPhone:   result.contactPhone,
+        contactAddress: result.contactAddress,
+      },
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 

@@ -63,9 +63,10 @@ export async function resolveStoreTenant(req: Request): Promise<StoreTenantPubli
 }
 
 export function tenantJson(t: StoreTenantPublic) {
+  const name = t.name?.trim() || 'Mağaza';
   return {
     id:      t.id,
-    name:    t.name,
+    name,
     slug:    t.slug,
     theme:   t.theme,
     logoUrl: t.logoUrl,

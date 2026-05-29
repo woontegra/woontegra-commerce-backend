@@ -53,6 +53,27 @@ const ASSIGNABLE_USER_ROLES: UserRole[] = [
   UserRole.USER,
 ];
 
+type InitialTenantPlan = 'TRIAL' | Plan;
+
+function parseInitialTenantPlan(value: unknown): InitialTenantPlan {
+  if (value === undefined || value === null || value === '') return 'TRIAL';
+  const raw = String(value).trim().toUpperCase();
+  if (raw === 'TRIAL' || raw === 'DEMO') return 'TRIAL';
+  if (raw === 'PROFESSIONAL') return Plan.PRO;
+  if (Object.values(Plan).includes(raw as Plan)) return raw as Plan;
+  throw new Error('Geçersiz plan. TRIAL, STARTER, PRO veya ENTERPRISE kullanın.');
+}
+
+function defaultPaidSubscriptionEndDate(billingCycle: BillingCycle): Date {
+  const end = new Date();
+  if (billingCycle === BillingCycle.YEARLY) {
+    end.setFullYear(end.getFullYear() + 1);
+  } else {
+    end.setMonth(end.getMonth() + 1);
+  }
+  return end;
+}
+
 // ─── AdminService ─────────────────────────────────────────────────────────────
 
 export class AdminService {
@@ -1167,6 +1188,10 @@ export class AdminService {
       subdomain?: string | null;
       customDomain?: string | null;
       domainVerified?: boolean;
+      /** TRIAL (varsayılan) veya STARTER | PRO | ENTERPRISE */
+      initialPlan?: InitialTenantPlan | string;
+      billingCycle?: BillingCycle;
+      subscriptionEndDate?: string;
       owner?: {
         email: string;
         password: string;
@@ -1179,6 +1204,30 @@ export class AdminService {
   ) {
     const name = input.name?.trim();
     if (!name) throw new Error('Tenant adı gerekli.');
+
+    const initialPlan = parseInitialTenantPlan(input.initialPlan);
+    const isTrial     = initialPlan === 'TRIAL';
+
+    if (!isTrial && !(input.owner?.email && input.owner.password)) {
+      throw new Error('Ücretli plan için ilk kullanıcı (owner/admin) zorunludur.');
+    }
+
+    let billingCycle = input.billingCycle ?? BillingCycle.MONTHLY;
+    if (!Object.values(BillingCycle).includes(billingCycle)) {
+      throw new Error('Geçersiz billingCycle.');
+    }
+
+    let subscriptionEndDate: Date | null = null;
+    if (!isTrial) {
+      if (input.subscriptionEndDate) {
+        subscriptionEndDate = new Date(input.subscriptionEndDate);
+        if (Number.isNaN(subscriptionEndDate.getTime())) {
+          throw new Error('Geçersiz subscriptionEndDate.');
+        }
+      } else {
+        subscriptionEndDate = defaultPaidSubscriptionEndDate(billingCycle);
+      }
+    }
 
     const baseSlug = this.slugifyTenantKey(input.slug?.trim() || name);
     const slug       = await this.ensureUniqueSlug(baseSlug);
@@ -1201,6 +1250,9 @@ export class AdminService {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
+    const paidPlan = isTrial ? null : (initialPlan as Plan);
+    const ownerPlan = paidPlan ?? Plan.STARTER;
+
     const tenant = await prisma.$transaction(async tx => {
       const t = await tx.tenant.create({
         data: {
@@ -1210,10 +1262,12 @@ export class AdminService {
           customDomain,
           domainVerified: input.domainVerified ?? false,
           isActive:         true,
-          status:           'TRIAL',
-          trialEndsAt,
+          status:           isTrial ? 'TRIAL' : 'ACTIVE',
+          trialEndsAt:      isTrial ? trialEndsAt : null,
         },
       });
+
+      let ownerUserId: string | null = null;
 
       if (input.owner?.email && input.owner.password) {
         const email = input.owner.email.trim().toLowerCase();
@@ -1224,7 +1278,7 @@ export class AdminService {
         if (!ASSIGNABLE_USER_ROLES.includes(role)) throw new Error('Geçersiz kullanıcı rolü.');
 
         const hashed = await hashPassword(input.owner.password);
-        await tx.user.create({
+        const ownerUser = await tx.user.create({
           data: {
             email,
             password:  hashed,
@@ -1232,8 +1286,23 @@ export class AdminService {
             lastName:  input.owner.lastName?.trim() || 'User',
             role:      role as UserRole,
             tenantId:  t.id,
-            plan:      Plan.STARTER,
+            plan:      ownerPlan,
             isActive:  true,
+          },
+        });
+        ownerUserId = ownerUser.id;
+      }
+
+      if (paidPlan && ownerUserId && subscriptionEndDate) {
+        await tx.subscription.create({
+          data: {
+            tenantId:     t.id,
+            userId:         ownerUserId,
+            plan:           paidPlan,
+            billingCycle,
+            status:         SubscriptionStatus.ACTIVE,
+            startDate:      new Date(),
+            endDate:        subscriptionEndDate,
           },
         });
       }
@@ -1245,7 +1314,11 @@ export class AdminService {
       userId: adminId, userEmail: adminEmail, userRole: 'SUPER_ADMIN',
       action: AuditAction.TENANT_CREATED, category: AuditCategory.TENANT,
       targetType: 'Tenant', targetId: tenant.id, targetName: tenant.name,
-      details: { slug, subdomain, customDomain, hasOwner: !!input.owner },
+      details: {
+        slug, subdomain, customDomain, hasOwner: !!input.owner,
+        initialPlan, billingCycle: isTrial ? null : billingCycle,
+        subscriptionEndDate: subscriptionEndDate?.toISOString() ?? null,
+      },
       ipAddress: ip,
     });
 

@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../../common/middleware/authEnhanced';
 import {
-  getSettings, updateSettings,
+  getSettings, updateSettings, updateStoreInfo,
   uploadLogo, logoUploader,
   uploadFavicon, faviconUploader,
   updateDomain,
@@ -18,6 +18,7 @@ router.use(authenticate);
 
 router.get('/',       getSettings  as any);
 router.put('/',       updateSettings as any);
+router.put('/store-info', updateStoreInfo as any);
 router.put('/domain', updateDomain as any);
 
 // Logo upload — wrap multer errors

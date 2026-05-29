@@ -25,6 +25,7 @@ export async function createTenant(req: AdminRequest, res: Response): Promise<vo
   try {
     const {
       name, slug, subdomain, customDomain, domainVerified, owner,
+      initialPlan, billingCycle, subscriptionEndDate,
     } = req.body ?? {};
     if (!name?.trim()) {
       res.status(400).json({ success: false, message: 'name gerekli.' });
@@ -33,7 +34,10 @@ export async function createTenant(req: AdminRequest, res: Response): Promise<vo
     const data = await adminService.createTenant(
       req.user!.userId,
       req.user!.email,
-      { name, slug, subdomain, customDomain, domainVerified, owner },
+      {
+        name, slug, subdomain, customDomain, domainVerified, owner,
+        initialPlan, billingCycle, subscriptionEndDate,
+      },
       getIp(req),
     );
     res.status(201).json({ success: true, data });
