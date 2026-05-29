@@ -71,7 +71,15 @@ function defaultPaidSubscriptionEndDate(billingCycle: BillingCycle): Date {
   } else {
     end.setMonth(end.getMonth() + 1);
   }
-  return end;
+  return normalizeSubscriptionEndDate(end);
+}
+
+/** Bitiş tarihi gün içinde geçersiz sayılmasın (liste endDate >= now filtresi). */
+function normalizeSubscriptionEndDate(input: Date): Date {
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return d;
+  d.setUTCHours(23, 59, 59, 999);
+  return d;
 }
 
 // ─── AdminService ─────────────────────────────────────────────────────────────
@@ -848,36 +856,49 @@ export class AdminService {
     });
     if (!adminUser) throw new Error('Tenant için OWNER veya ADMIN kullanıcı bulunamadı.');
 
-    // Cancel existing active subscriptions
-    await prisma.subscription.updateMany({
-      where: { tenantId, status: SubscriptionStatus.ACTIVE },
-      data:  { status: SubscriptionStatus.CANCELED, canceledAt: new Date() },
-    });
+    const normalizedEnd = normalizeSubscriptionEndDate(endDate);
 
-    // Create new manual subscription
-    const subscription = await prisma.subscription.create({
-      data: {
-        tenantId,
-        userId:      adminUser.id,
-        plan,
-        billingCycle,
-        status:    SubscriptionStatus.ACTIVE,
-        startDate: new Date(),
-        endDate,
-      },
-    });
+    const subscription = await prisma.$transaction(async (tx) => {
+      await tx.subscription.updateMany({
+        where: { tenantId, status: SubscriptionStatus.ACTIVE },
+        data:  { status: SubscriptionStatus.CANCELED, canceledAt: new Date() },
+      });
 
-    // Sync User.plan for all users in tenant
-    await prisma.user.updateMany({
-      where: { tenantId },
-      data:  { plan },
+      const sub = await tx.subscription.create({
+        data: {
+          tenantId,
+          userId:       adminUser.id,
+          plan,
+          billingCycle,
+          status:       SubscriptionStatus.ACTIVE,
+          startDate:    new Date(),
+          endDate:      normalizedEnd,
+        },
+      });
+
+      await tx.user.updateMany({
+        where: { tenantId },
+        data:  { plan },
+      });
+
+      await tx.tenant.update({
+        where: { id: tenantId },
+        data:  {
+          status:      'ACTIVE',
+          trialEndsAt: null,
+          isActive:    true,
+          suspendedAt: null,
+        },
+      });
+
+      return sub;
     });
 
     await auditService.log({
       userId: adminId, userEmail: adminEmail, userRole: 'SUPER_ADMIN',
       action: AuditAction.TENANT_PLAN_CHANGED, category: AuditCategory.BILLING,
       targetType: 'Tenant', targetId: tenantId, targetName: tenant.name,
-      details: { plan, billingCycle, endDate: endDate.toISOString(), subscriptionId: subscription.id },
+      details: { plan, billingCycle, endDate: normalizedEnd.toISOString(), subscriptionId: subscription.id },
       ipAddress: ip,
     });
 
@@ -1220,7 +1241,7 @@ export class AdminService {
     let subscriptionEndDate: Date | null = null;
     if (!isTrial) {
       if (input.subscriptionEndDate) {
-        subscriptionEndDate = new Date(input.subscriptionEndDate);
+        subscriptionEndDate = normalizeSubscriptionEndDate(new Date(input.subscriptionEndDate));
         if (Number.isNaN(subscriptionEndDate.getTime())) {
           throw new Error('Geçersiz subscriptionEndDate.');
         }
