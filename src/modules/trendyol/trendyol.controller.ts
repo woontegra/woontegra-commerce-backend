@@ -839,9 +839,19 @@ export const retrySyncQueue = async (req: Request, res: Response) => {
 export const syncTrendyolOrders = async (req: Request, res: Response) => {
   try {
     const result = await orderSyncService.syncForTenant(tid(req));
+    const parts = [
+      `${result.createdCount} yeni sipariş`,
+      `${result.updatedCount} güncellendi`,
+    ];
+    if (result.skippedCount > 0) {
+      parts.push(`${result.skippedCount} değişmedi`);
+    }
+    if (result.errorCount > 0) {
+      parts.push(`${result.errorCount} hata`);
+    }
     res.json({
       success: true,
-      message: `${result.synced} yeni sipariş kaydedildi, ${result.skipped} atlandı${result.errors > 0 ? `, ${result.errors} hata` : ''}.`,
+      message: `${parts.join(', ')}.`,
       data: result,
     });
   } catch (err: any) {

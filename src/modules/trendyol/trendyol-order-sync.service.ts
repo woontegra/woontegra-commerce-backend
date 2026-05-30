@@ -2,23 +2,43 @@ import prisma from '../../config/database';
 import { TrendyolClient } from '../marketplace/clients/trendyol.client';
 import { logger } from '../../config/logger';
 import { decryptTrendyolCredentials } from '../../common/crypto/marketplace-credential.crypto';
+import type { TrendyolOrder, Prisma } from '@prisma/client';
 
 export interface OrderSyncResult {
-  synced:  number;
-  skipped: number;
-  errors:  number;
-  details: string[];
+  /** Geriye dönük uyumluluk — createdCount ile aynı */
+  synced:        number;
+  createdCount:  number;
+  updatedCount:  number;
+  skippedCount:  number;
+  errors:        number;
+  errorCount:    number;
+  details:       string[];
 }
+
+type OrderProcessOutcome = 'created' | 'updated' | 'unchanged';
+
+type OrderHeaderData = {
+  integrationId:       string;
+  status:              string;
+  totalPrice:          number;
+  orderDate:           Date;
+  cargoTrackingNumber: string | null;
+  customerFirstName:   string | null;
+  customerLastName:    string | null;
+  customerEmail:       string | null;
+  shipmentAddress:     Prisma.InputJsonValue;
+  invoiceAddress:      Prisma.InputJsonValue;
+  rawPayload:          Prisma.InputJsonValue;
+};
 
 export class TrendyolOrderSyncService {
 
   /**
    * Belirli bir tenant için Trendyol siparişlerini çeker ve kayıt eder.
    * - Son sync zamanından (lastOrderSync) itibaren ya da son 7 günü alır
-   * - Duplicate kontrolü: @@unique([tenantId, orderNumber])
-   * - Barkod üzerinden ürün/varyant eşleştirir
-   * - Stock düşer (Stock.quantity + ProductVariant.stockQuantity)
-   * - Transaction güvenli
+   * - Benzersiz anahtar: @@unique([tenantId, orderNumber])
+   * - Mevcut siparişlerde header alanları upsert edilir (stok tekrar düşülmez)
+   * - Yeni siparişlerde barkod eşleştirme + stok düşme
    */
   async syncForTenant(tenantId: string): Promise<OrderSyncResult> {
     const integration = await prisma.trendyolIntegration.findFirst({
@@ -34,9 +54,8 @@ export class TrendyolOrderSyncService {
       sellerId:  creds.sellerId,
     });
 
-    // Son sync'ten itibaren ya da son 7 gün
     const sinceMs = integration.lastOrderSync
-      ? integration.lastOrderSync.getTime() - 5 * 60 * 1000 // 5 dk örtüşme
+      ? integration.lastOrderSync.getTime() - 5 * 60 * 1000
       : Date.now() - 7 * 24 * 60 * 60 * 1000;
 
     logger.info({
@@ -59,55 +78,148 @@ export class TrendyolOrderSyncService {
 
     logger.info({ message: `[OrderSync] ${orders.length} sipariş alındı`, tenantId });
 
-    let synced = 0, skipped = 0, errors = 0;
+    let createdCount = 0, updatedCount = 0, skippedCount = 0, errorCount = 0;
     const details: string[] = [];
 
     for (const raw of orders) {
       const orderNumber = String(raw.orderNumber ?? raw.id ?? '');
-      if (!orderNumber) { errors++; continue; }
+      if (!orderNumber) { errorCount++; continue; }
 
       try {
-        const wasNew = await this.processOrder(tenantId, integration.id, raw);
-        if (wasNew) {
-          synced++;
-          details.push(`✓ ${orderNumber}`);
+        const outcome = await this.processOrder(tenantId, integration.id, raw);
+        if (outcome === 'created') {
+          createdCount++;
+          details.push(`+ ${orderNumber}`);
+        } else if (outcome === 'updated') {
+          updatedCount++;
+          details.push(`↻ ${orderNumber}`);
         } else {
-          skipped++;
+          skippedCount++;
         }
       } catch (err: any) {
-        errors++;
+        errorCount++;
         details.push(`✗ ${orderNumber}: ${err.message}`);
         logger.error({ message: '[OrderSync] Sipariş işleme hatası', tenantId, orderNumber, err: err.message });
       }
     }
 
-    // lastOrderSync güncelle
     await prisma.trendyolIntegration.update({
       where: { id: integration.id },
       data:  { lastOrderSync: new Date() },
     });
 
-    logger.info({ message: '[OrderSync] Tamamlandı', tenantId, synced, skipped, errors });
+    logger.info({
+      message: '[OrderSync] Tamamlandı',
+      tenantId,
+      createdCount,
+      updatedCount,
+      skippedCount,
+      errorCount,
+    });
 
-    return { synced, skipped, errors, details };
+    return {
+      synced:       createdCount,
+      createdCount,
+      updatedCount,
+      skippedCount,
+      errors:       errorCount,
+      errorCount,
+      details,
+    };
+  }
+
+  private buildOrderHeader(integrationId: string, raw: any): OrderHeaderData {
+    return {
+      integrationId,
+      status:              String(raw.status ?? raw.shipmentPackageStatus ?? 'Created'),
+      totalPrice:          Number(raw.packageTotalPrice ?? raw.totalPrice ?? 0),
+      orderDate:           raw.orderDate
+        ? new Date(Number(raw.orderDate))
+        : raw.lastModifiedDate
+          ? new Date(Number(raw.lastModifiedDate))
+          : new Date(),
+      cargoTrackingNumber: this.extractCargoTrackingNumber(raw),
+      customerFirstName:   raw.shipmentAddress?.firstName ?? raw.customerFirstName ?? null,
+      customerLastName:    raw.shipmentAddress?.lastName  ?? raw.customerLastName  ?? null,
+      customerEmail:       raw.customerEmail ?? null,
+      shipmentAddress:     raw.shipmentAddress ?? null,
+      invoiceAddress:      raw.invoiceAddress  ?? null,
+      rawPayload:          raw,
+    };
+  }
+
+  /** Trendyol yanıtından kargo takip no — paket seviyesi alanları dahil. */
+  private extractCargoTrackingNumber(raw: any): string | null {
+    const candidates = [
+      raw.cargoTrackingNumber,
+      raw.trackingNumber,
+      raw.shipmentPackage?.cargoTrackingNumber,
+      Array.isArray(raw.shipmentPackages) ? raw.shipmentPackages[0]?.cargoTrackingNumber : null,
+      Array.isArray(raw.packages) ? raw.packages[0]?.cargoTrackingNumber : null,
+    ];
+    for (const c of candidates) {
+      if (c != null && String(c).trim()) return String(c).trim();
+    }
+    return null;
+  }
+
+  private orderHeaderChanged(existing: TrendyolOrder, next: OrderHeaderData): boolean {
+    if (existing.status !== next.status) return true;
+    if (String(existing.cargoTrackingNumber ?? '') !== String(next.cargoTrackingNumber ?? '')) return true;
+    if (Number(existing.totalPrice) !== next.totalPrice) return true;
+    if (String(existing.customerFirstName ?? '') !== String(next.customerFirstName ?? '')) return true;
+    if (String(existing.customerLastName ?? '')  !== String(next.customerLastName ?? ''))  return true;
+    if (String(existing.customerEmail ?? '')     !== String(next.customerEmail ?? ''))     return true;
+    if (JSON.stringify(existing.shipmentAddress ?? null) !== JSON.stringify(next.shipmentAddress ?? null)) return true;
+    if (JSON.stringify(existing.invoiceAddress ?? null)  !== JSON.stringify(next.invoiceAddress ?? null))  return true;
+
+    const prevStatus = (existing.rawPayload as Record<string, unknown> | null)?.status;
+    const nextStatus = (next.rawPayload as Record<string, unknown> | null)?.status;
+    if (String(prevStatus ?? '') !== String(nextStatus ?? '')) return true;
+
+    const prevCargo = (existing.rawPayload as Record<string, unknown> | null)?.cargoTrackingNumber;
+    if (String(prevCargo ?? '') !== String(next.cargoTrackingNumber ?? '')) return true;
+
+    return false;
   }
 
   /**
-   * Tek bir siparişi işler. Yeni ise true döner; zaten vardıysa false.
+   * Tek bir siparişi işler.
+   * Yeni: create + stok düş. Mevcut: header upsert (kalemler/stok dokunulmaz).
    */
-  private async processOrder(tenantId: string, integrationId: string, raw: any): Promise<boolean> {
+  private async processOrder(tenantId: string, integrationId: string, raw: any): Promise<OrderProcessOutcome> {
     const orderNumber = String(raw.orderNumber ?? raw.id ?? '');
+    const header = this.buildOrderHeader(integrationId, raw);
 
-    // Duplicate kontrolü — transaction öncesi hızlı kontrol
-    const exists = await prisma.trendyolOrder.findUnique({
+    const existing = await prisma.trendyolOrder.findUnique({
       where: { tenantId_orderNumber: { tenantId, orderNumber } },
-      select: { id: true },
     });
-    if (exists) return false;
+
+    if (existing) {
+      if (!this.orderHeaderChanged(existing, header)) {
+        return 'unchanged';
+      }
+
+      await prisma.trendyolOrder.update({
+        where: { id: existing.id },
+        data: {
+          integrationId:       header.integrationId,
+          status:              header.status,
+          totalPrice:          header.totalPrice,
+          cargoTrackingNumber: header.cargoTrackingNumber,
+          customerFirstName:   header.customerFirstName,
+          customerLastName:    header.customerLastName,
+          customerEmail:       header.customerEmail,
+          shipmentAddress:     header.shipmentAddress,
+          invoiceAddress:      header.invoiceAddress,
+          rawPayload:          header.rawPayload,
+        },
+      });
+
+      return 'updated';
+    }
 
     const lines: any[] = Array.isArray(raw.lines) ? raw.lines : [];
-
-    // Batch barcode lookup (N+1 önleme)
     const barcodes = [...new Set(lines.map((l: any) => String(l.barcode ?? '')).filter(Boolean))];
 
     const [products, variants] = await Promise.all([
@@ -125,22 +237,21 @@ export class TrendyolOrderSyncService {
     const variantByBarcode = new Map(variants.map(v => [v.barcode!, { variantId: v.id, productId: v.productId }]));
 
     await prisma.$transaction(async (tx) => {
-
       const newOrder = await tx.trendyolOrder.create({
         data: {
           tenantId,
-          integrationId,
+          integrationId:       header.integrationId,
           orderNumber,
-          status:              String(raw.status ?? 'Created'),
-          totalPrice:          Number(raw.totalPrice ?? 0),
-          orderDate:           raw.orderDate ? new Date(Number(raw.orderDate)) : new Date(),
-          cargoTrackingNumber: raw.cargoTrackingNumber ?? null,
-          customerFirstName:   raw.shipmentAddress?.firstName ?? raw.customerFirstName ?? null,
-          customerLastName:    raw.shipmentAddress?.lastName  ?? raw.customerLastName  ?? null,
-          customerEmail:       raw.customerEmail ?? null,
-          shipmentAddress:     raw.shipmentAddress ?? null,
-          invoiceAddress:      raw.invoiceAddress  ?? null,
-          rawPayload:          raw,
+          status:              header.status,
+          totalPrice:          header.totalPrice,
+          orderDate:           header.orderDate,
+          cargoTrackingNumber: header.cargoTrackingNumber,
+          customerFirstName:   header.customerFirstName,
+          customerLastName:    header.customerLastName,
+          customerEmail:       header.customerEmail,
+          shipmentAddress:     header.shipmentAddress,
+          invoiceAddress:      header.invoiceAddress,
+          rawPayload:          header.rawPayload,
         },
       });
 
@@ -154,7 +265,7 @@ export class TrendyolOrderSyncService {
         await tx.trendyolOrderItem.create({
           data: {
             orderId:     newOrder.id,
-            lineId:      line.id     != null ? String(line.id)  : null,
+            lineId:      line.id != null ? String(line.id) : null,
             barcode,
             productName: String(line.productName ?? line.productCode ?? ''),
             productId,
@@ -165,9 +276,7 @@ export class TrendyolOrderSyncService {
           },
         });
 
-        // ── Stok düşme ───────────────────────────────────────────────────────
         if (variantId) {
-          // Varyant stoğu düş, minimum 0'da tut
           const variant = await tx.productVariant.findUnique({
             where:  { id: variantId },
             select: { stockQuantity: true },
@@ -178,7 +287,6 @@ export class TrendyolOrderSyncService {
             data:  { stockQuantity: newQty },
           });
         } else if (productId) {
-          // Stock tablosundan düş (minimum 0)
           const stockRow = await tx.stock.findUnique({
             where:  { productId },
             select: { quantity: true },
@@ -199,12 +307,9 @@ export class TrendyolOrderSyncService {
       });
     });
 
-    return true;
+    return 'created';
   }
 
-  /**
-   * Tüm aktif Trendyol entegrasyonlarını tarar (cron için).
-   */
   async syncAllTenants(): Promise<void> {
     const integrations = await prisma.trendyolIntegration.findMany({
       where:  { isActive: true },
