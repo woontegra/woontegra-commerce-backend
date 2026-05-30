@@ -20,6 +20,8 @@ const PAYMENT_STATUSES = [
   'CANCELLED',
 ] as const satisfies readonly OrderPaymentStatus[];
 
+const ORDER_SOURCES = ['all', 'storefront', 'trendyol'] as const;
+
 export const orderListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
@@ -27,6 +29,7 @@ export const orderListQuerySchema = z.object({
   search: z.string().max(200).optional(),
   paymentProvider: z.enum(PAYMENT_PROVIDER_TYPES).optional(),
   paymentStatus: z.enum(PAYMENT_STATUSES).optional(),
+  source: z.enum(ORDER_SOURCES).optional(),
 });
 
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;

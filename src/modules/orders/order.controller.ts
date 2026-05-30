@@ -5,7 +5,7 @@ import { AppError } from '../../common/middleware/error.middleware';
 import { eventBus } from '../notifications/events';
 import { auditService, AuditCategory, AuditAction } from '../audit/audit.service';
 import { invoiceService } from '../../services/invoice.service';
-import { toAdminOrderJson, toAdminOrderListJson } from './order-admin.presenter';
+import { toAdminOrderJson } from './order-admin.presenter';
 import { parseOrderListQuery } from './order-list.query';
 
 const VALID_STATUSES = ['PENDING', 'PROCESSING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
@@ -22,19 +22,20 @@ export class OrderController {
         return;
       }
 
-      const result = await this.orderService.getAll(tenantId, {
+      const result = await this.orderService.getAllUnified(tenantId, {
         page:            parsed.data.page,
         limit:           parsed.data.limit,
         status:          parsed.data.status,
         search:          parsed.data.search,
         paymentProvider: parsed.data.paymentProvider,
         paymentStatus:   parsed.data.paymentStatus,
+        source:          parsed.data.source,
       });
 
       res.status(200).json({
         status: 'success',
         data: {
-          orders:     toAdminOrderListJson(result.orders as never),
+          orders:     result.orders,
           total:      result.total,
           page:       result.page,
           totalPages: result.totalPages,

@@ -16,6 +16,14 @@ import type { OrderPaymentStatus, PaymentProviderType } from '@prisma/client';
 import { storeEmailService } from '../store-public/store-email.service';
 import type { OrderListQuery } from './order-list.query';
 import { buildOrderListWhere } from './order-list.util';
+import { buildTrendyolOrderListWhere } from './order-list-trendyol.util';
+import { toAdminOrderListJson } from './order-admin.presenter';
+import {
+  mapStorefrontListItemToUnified,
+  mapTrendyolOrderToUnified,
+  unifiedSortKey,
+} from './order-unified.presenter';
+import type { OrderStatus } from '@prisma/client';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +55,7 @@ export interface GetAllOrdersQuery {
   search?:           string;
   paymentProvider?:  PaymentProviderType;
   paymentStatus?:    OrderPaymentStatus;
+  source?:           'all' | 'storefront' | 'trendyol';
 }
 
 /** Sipariş durumu güncellemesi — müşteri e-postası isteğe bağlı (admin vs ödeme callback). */
@@ -242,6 +251,124 @@ export class OrderService {
       total,
       page:       Number(page),
       totalPages: Math.ceil(total / Number(limit)),
+    };
+  }
+
+  /** Storefront + Trendyol read-time merge (migration yok). */
+  async getAllUnified(tenantId: string, query: GetAllOrdersQuery = {}) {
+    const source = query.source ?? 'all';
+    const page   = Number(query.page ?? 1);
+    const limit  = Number(query.limit ?? 20);
+
+    if (source === 'storefront') {
+      const result   = await this.getAll(tenantId, query);
+      const listJson = toAdminOrderListJson(result.orders as never);
+      return {
+        orders:     listJson.map(mapStorefrontListItemToUnified),
+        total:      result.total,
+        page:       result.page,
+        totalPages: result.totalPages,
+      };
+    }
+
+    if (source === 'trendyol') {
+      return this.getTrendyolOrdersUnified(tenantId, query, page, limit);
+    }
+
+    return this.getMergedOrdersUnified(tenantId, query, page, limit);
+  }
+
+  private buildListQuery(query: GetAllOrdersQuery): OrderListQuery {
+    return {
+      page:   Number(query.page ?? 1),
+      limit:  Number(query.limit ?? 20),
+      ...(query.status ? { status: query.status.toUpperCase() as OrderListQuery['status'] } : {}),
+      ...(query.search ? { search: query.search } : {}),
+      ...(query.paymentProvider ? { paymentProvider: query.paymentProvider } : {}),
+      ...(query.paymentStatus ? { paymentStatus: query.paymentStatus } : {}),
+    };
+  }
+
+  private async getTrendyolOrdersUnified(
+    tenantId: string,
+    query: GetAllOrdersQuery,
+    page: number,
+    limit: number,
+  ) {
+    const listQuery = this.buildListQuery(query);
+    const where = buildTrendyolOrderListWhere(tenantId, {
+      status: listQuery.status as OrderStatus | undefined,
+      search: listQuery.search,
+    });
+    const skip = (page - 1) * limit;
+
+    const [total, rows] = await prisma.$transaction([
+      prisma.trendyolOrder.count({ where }),
+      prisma.trendyolOrder.findMany({
+        where,
+        orderBy: { orderDate: 'desc' },
+        skip,
+        take:    limit,
+      }),
+    ]);
+
+    return {
+      orders:     rows.map(mapTrendyolOrderToUnified),
+      total,
+      page,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
+  }
+
+  private async getMergedOrdersUnified(
+    tenantId: string,
+    query: GetAllOrdersQuery,
+    page: number,
+    limit: number,
+  ) {
+    const listQuery = this.buildListQuery(query);
+    const paymentFiltersActive = !!(listQuery.paymentProvider || listQuery.paymentStatus);
+    const storefrontWhere = buildOrderListWhere(tenantId, listQuery);
+
+    const trendyolWhere = paymentFiltersActive
+      ? ({ tenantId, id: { in: [] as string[] } } satisfies Prisma.TrendyolOrderWhereInput)
+      : buildTrendyolOrderListWhere(tenantId, {
+          status: listQuery.status as OrderStatus | undefined,
+          search: listQuery.search,
+        });
+
+    const fetchCap = page * limit;
+
+    const [storefrontTotal, trendyolTotal, storefrontRows, trendyolRows] = await Promise.all([
+      prisma.order.count({ where: storefrontWhere }),
+      prisma.trendyolOrder.count({ where: trendyolWhere }),
+      prisma.order.findMany({
+        where:   storefrontWhere,
+        include: ORDER_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        take:    fetchCap,
+      }),
+      prisma.trendyolOrder.findMany({
+        where:   trendyolWhere,
+        orderBy: { orderDate: 'desc' },
+        take:    fetchCap,
+      }),
+    ]);
+
+    const merged = [
+      ...toAdminOrderListJson(storefrontRows as never).map(mapStorefrontListItemToUnified),
+      ...trendyolRows.map(mapTrendyolOrderToUnified),
+    ].sort((a, b) => unifiedSortKey(b.orderDate) - unifiedSortKey(a.orderDate));
+
+    const total      = storefrontTotal + trendyolTotal;
+    const paginated  = merged.slice((page - 1) * limit, page * limit);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    return {
+      orders: paginated,
+      total,
+      page,
+      totalPages,
     };
   }
 
