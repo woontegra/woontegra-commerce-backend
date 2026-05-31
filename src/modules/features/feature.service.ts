@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../../config/logger';
+import { hasPlanAccess, normalizeBillingPlan } from '../../common/utils/planAccess';
 import { DEFAULT_FEATURES, FeatureKey, PLAN_FEATURES, getMinPlanForFeature } from './feature.constants';
 
 const prisma = new PrismaClient();
@@ -50,7 +51,7 @@ export class FeatureService {
       select:  { plan: true },
     });
     if (sub?.plan) {
-      return sub.plan as 'STARTER' | 'PRO' | 'ENTERPRISE';
+      return normalizeBillingPlan(sub.plan);
     }
     
     // 2. If no subscription, check User.plan
@@ -60,7 +61,7 @@ export class FeatureService {
         select: { plan: true },
       });
       if (user?.plan) {
-        return user.plan as 'STARTER' | 'PRO' | 'ENTERPRISE';
+        return normalizeBillingPlan(user.plan);
       }
     }
     
@@ -85,16 +86,21 @@ export class FeatureService {
     ]);
 
     const planKeys = this.getPlanFeatureKeys(plan);
+    const normalizedPlan = normalizeBillingPlan(plan);
 
     const flags: Record<string, boolean> = {};
     for (const f of features) {
+      const key = f.key as FeatureKey;
+      const minPlan = getMinPlanForFeature(key);
+      const hierarchyAllowed = hasPlanAccess(normalizedPlan, minPlan);
       const override = f.tenantFeatures[0];
-      if (override) {
-        // Admin explicitly set this — honor it regardless of plan
+
+      if (hierarchyAllowed) {
+        flags[f.key] = true;
+      } else if (override) {
         flags[f.key] = override.enabled;
       } else {
-        // Plan-based: enabled if in plan's feature set
-        flags[f.key] = planKeys.includes(f.key as FeatureKey);
+        flags[f.key] = planKeys.includes(key);
       }
     }
 

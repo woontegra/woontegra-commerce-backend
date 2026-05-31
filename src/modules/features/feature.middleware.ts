@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { FeatureService } from './feature.service';
 import { FeatureKey, getMinPlanForFeature } from './feature.constants';
+import { hasPlanAccess } from '../../common/utils/planAccess';
 import { logger } from '../../config/logger';
 
 const featureService = new FeatureService();
@@ -78,11 +79,12 @@ export function checkPlanFeature(featureKey: FeatureKey) {
 
       if (enabled) return next();
 
-      // Feature disabled — figure out which plan unlocks it
-      const [currentPlan, requiredPlan] = await Promise.all([
-        featureService.getTenantPlan(tenantId),
-        Promise.resolve(getMinPlanForFeature(featureKey)),
-      ]);
+      const currentPlan = await featureService.getTenantPlan(tenantId);
+      const requiredPlan = getMinPlanForFeature(featureKey);
+
+      if (hasPlanAccess(currentPlan, requiredPlan)) {
+        return next();
+      }
 
       logger.info({
         message: '[PlanGate] Access denied — plan upgrade required',
