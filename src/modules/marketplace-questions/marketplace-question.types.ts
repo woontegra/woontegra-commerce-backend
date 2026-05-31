@@ -109,3 +109,6 @@ export interface ExternalQuestionListResult {
 export interface AnswerQuestionInput {
   text: string;
 }
+
+export const MARKETPLACE_ANSWER_MIN_LENGTH = 10;
+export const MARKETPLACE_ANSWER_MAX_LENGTH = 2000;

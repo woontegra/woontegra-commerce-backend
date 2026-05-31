@@ -87,11 +87,22 @@ export const syncMarketplaceQuestions = async (req: Request, res: Response) => {
 
 /**
  * POST /api/marketplace-questions/:id/answer
- * Faz 1b'de aktif edilecek — şimdilik 501.
  */
-export const answerMarketplaceQuestion = async (_req: Request, res: Response) => {
-  res.status(501).json({
-    success: false,
-    error:   'Cevap gönderme henüz aktif değil. Faz 1b ile eklenecek.',
-  });
+export const answerMarketplaceQuestion = async (req: Request, res: Response) => {
+  try {
+    const tenantId = tid(req);
+    const id       = String(req.params.id ?? '');
+    const { text } = req.body ?? {};
+
+    const data = await marketplaceQuestionService.answer(tenantId, id, { text });
+
+    res.json({
+      success: true,
+      message: 'Cevap Trendyol\'a gönderildi. Onay süreci bekleniyor.',
+      data,
+    });
+  } catch (err: any) {
+    const status = err.statusCode ?? 500;
+    res.status(status).json({ success: false, error: err.message ?? 'Cevap gönderilemedi.' });
+  }
 };

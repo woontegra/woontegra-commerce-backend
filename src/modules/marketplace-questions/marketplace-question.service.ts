@@ -6,6 +6,11 @@ import type {
   MarketplaceQuestionSyncInput,
   MarketplaceQuestionSyncResult,
   ExternalQuestionRecord,
+  AnswerQuestionInput,
+} from './marketplace-question.types';
+import {
+  MARKETPLACE_ANSWER_MIN_LENGTH,
+  MARKETPLACE_ANSWER_MAX_LENGTH,
 } from './marketplace-question.types';
 import type { MarketplaceQuestionProvider } from './providers/marketplace-question.provider';
 import { trendyolQuestionProvider } from './providers/trendyol-question.provider';
@@ -140,6 +145,44 @@ async function upsertQuestion(
   return 'updated';
 }
 
+async function writeIntegrationLog(
+  tenantId: string,
+  status: 'success' | 'error',
+  message: string,
+  requestPayload: object,
+  responsePayload?: object,
+) {
+  await prisma.integrationLog.create({
+    data: {
+      tenantId,
+      status,
+      message,
+      requestPayload,
+      responsePayload: responsePayload ?? {},
+    },
+  }).catch(() => {});
+}
+
+function validateAnswerText(text: unknown): string {
+  const trimmed = String(text ?? '').trim();
+  if (!trimmed) {
+    throw Object.assign(new Error('Cevap metni zorunludur.'), { statusCode: 400 });
+  }
+  if (trimmed.length < MARKETPLACE_ANSWER_MIN_LENGTH) {
+    throw Object.assign(
+      new Error(`Cevap en az ${MARKETPLACE_ANSWER_MIN_LENGTH} karakter olmalıdır.`),
+      { statusCode: 422 },
+    );
+  }
+  if (trimmed.length > MARKETPLACE_ANSWER_MAX_LENGTH) {
+    throw Object.assign(
+      new Error(`Cevap en fazla ${MARKETPLACE_ANSWER_MAX_LENGTH} karakter olabilir.`),
+      { statusCode: 422 },
+    );
+  }
+  return trimmed;
+}
+
 export class MarketplaceQuestionService {
 
   async list(tenantId: string, query: MarketplaceQuestionListQuery = {}) {
@@ -218,6 +261,89 @@ export class MarketplaceQuestionService {
     }
 
     return { source, fetched, created, updated, unchanged, errors };
+  }
+
+  async answer(tenantId: string, id: string, input: AnswerQuestionInput) {
+    const text = validateAnswerText(input.text);
+
+    const row = await prisma.marketplaceQuestion.findFirst({
+      where: { id, tenantId },
+    });
+    if (!row) {
+      throw Object.assign(new Error('Soru bulunamadı.'), { statusCode: 404 });
+    }
+    if (row.source !== 'TRENDYOL') {
+      throw Object.assign(
+        new Error(`Bu kaynak için cevap gönderme henüz desteklenmiyor: ${row.source}`),
+        { statusCode: 422 },
+      );
+    }
+    if (row.type !== 'PRODUCT_QUESTION') {
+      throw Object.assign(
+        new Error('Yalnızca ürün sorularına cevap verilebilir.'),
+        { statusCode: 422 },
+      );
+    }
+    if (row.status !== 'WAITING_ANSWER') {
+      throw Object.assign(
+        new Error('Bu soru cevaplanabilir durumda değil.'),
+        { statusCode: 422 },
+      );
+    }
+
+    const provider = getProvider(row.source);
+    const logPayload = {
+      questionId:         row.id,
+      externalQuestionId: row.externalQuestionId,
+      source:             row.source,
+      textLength:         text.length,
+    };
+
+    try {
+      await provider.answerQuestion(tenantId, row.externalQuestionId, { text });
+    } catch (err: any) {
+      await writeIntegrationLog(
+        tenantId,
+        'error',
+        `Müşteri sorusu cevabı hatası: ${row.externalQuestionId} — ${err.message}`,
+        logPayload,
+        { error: err.message },
+      );
+      throw err;
+    }
+
+    let refreshed: ExternalQuestionRecord | null = null;
+    try {
+      refreshed = await provider.getQuestionDetail(tenantId, row.externalQuestionId);
+    } catch {
+      refreshed = null;
+    }
+
+    const now = new Date();
+    if (refreshed) {
+      await upsertQuestion(tenantId, row.source, refreshed);
+    } else {
+      await prisma.marketplaceQuestion.update({
+        where: { id: row.id },
+        data: {
+          answerText:     text,
+          status:         'PENDING_APPROVAL',
+          externalStatus: 'WAITING_FOR_APPROVE',
+          answeredAt:     now,
+          lastSyncedAt:   now,
+        },
+      });
+    }
+
+    await writeIntegrationLog(
+      tenantId,
+      'success',
+      `Müşteri sorusu cevabı gönderildi: ${row.externalQuestionId}`,
+      logPayload,
+      { ok: true },
+    );
+
+    return this.getById(tenantId, id);
   }
 }
 
