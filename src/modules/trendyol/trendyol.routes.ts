@@ -50,6 +50,7 @@ import {
   getTrendyolOrderById,
   sendTrendyolOrderInvoiceLink,
   sendTrendyolOrderInvoiceFile,
+  getTrendyolOrderCargoLabel,
   processSyncQueueManual,
   getSyncQueueStats,
   retrySyncQueue,
@@ -136,6 +137,7 @@ router.get   ('/sync-queue/stats',    trendyolGate, getSyncQueueStats);
 router.post  ('/orders/sync',         trendyolGate, syncTrendyolOrders);
 router.get   ('/orders',              trendyolGate, getTrendyolOrders);
 router.get   ('/orders/by-id/:id',    trendyolGate, getTrendyolOrderById);
+router.get   ('/orders/:id/cargo-label', trendyolGate, getTrendyolOrderCargoLabel);
 router.post  ('/orders/:id/invoice/link', trendyolGate, sendTrendyolOrderInvoiceLink);
 router.post  ('/orders/:id/invoice/file', trendyolGate, trendyolInvoiceFileUpload, sendTrendyolOrderInvoiceFile);
 router.get   ('/orders/:orderNumber', trendyolGate, getTrendyolOrderDetail);

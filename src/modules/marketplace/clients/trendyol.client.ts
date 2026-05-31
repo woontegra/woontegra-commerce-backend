@@ -539,6 +539,99 @@ export class TrendyolClient {
     }
   }
 
+  // COMMON LABEL — kargo etiketi (createCommonLabel + getCommonLabel)
+  private formatTrendyolCargoLabelError(error: any): Error {
+    const status = error.response?.status;
+    const data   = error.response?.data;
+    const detail = typeof data === 'string'
+      ? data
+      : (data?.message ?? data?.error?.message ?? data?.errors?.[0]?.message ?? JSON.stringify(data ?? {}));
+
+    if (status === 400) {
+      return new Error(
+        'Kargo takip numarası geçersiz veya etiket henüz oluşturulmamış. '
+        + 'Siparişi senkronize edip tekrar deneyin.',
+      );
+    }
+    if (status === 404) {
+      return new Error('Trendyol kargo etiketi bulunamadı.');
+    }
+    if (status === 401 || status === 403) {
+      return new Error('Trendyol API yetkilendirme hatası. Entegrasyon bilgilerinizi kontrol edin.');
+    }
+
+    return new Error(`Trendyol kargo etiketi alınamadı (${status ?? 'NET'}): ${detail || error.message}`);
+  }
+
+  /**
+   * Ortak etiket barkod talebi — createCommonLabel
+   * POST /integration/sellers/{sellerId}/common-label/{cargoTrackingNumber}
+   */
+  async createCommonLabel(cargoTrackingNumber: string): Promise<void> {
+    const tracking = encodeURIComponent(cargoTrackingNumber);
+    const url = `https://apigw.trendyol.com/integration/sellers/${this.credentials.sellerId}/common-label/${tracking}`;
+
+    try {
+      await axios.post(url, { format: 'ZPL' }, {
+        headers: this.commonHeaders,
+        timeout: 30_000,
+      });
+    } catch (error: any) {
+      // Etiket zaten oluşturulmuş olabilir — GET ile devam edilebilir
+      if (error.response?.status === 409) return;
+      throw this.formatTrendyolCargoLabelError(error);
+    }
+  }
+
+  /**
+   * Ortak etiket alma — getCommonLabel
+   * GET /integration/sellers/{sellerId}/common-label/{cargoTrackingNumber}
+   */
+  async getCommonLabel(cargoTrackingNumber: string): Promise<Array<{ format: string; label: string }>> {
+    const tracking = encodeURIComponent(cargoTrackingNumber);
+    const url = `https://apigw.trendyol.com/integration/sellers/${this.credentials.sellerId}/common-label/${tracking}`;
+
+    try {
+      const response = await axios.get(url, {
+        headers: this.commonHeaders,
+        timeout: 30_000,
+      });
+      const data = response.data?.data;
+      if (!Array.isArray(data)) return [];
+      return data.map((item: any) => ({
+        format: String(item.format ?? 'ZPL'),
+        label:  String(item.label ?? ''),
+      })).filter(item => item.label);
+    } catch (error: any) {
+      throw this.formatTrendyolCargoLabelError(error);
+    }
+  }
+
+  /**
+   * Ortak etiket sorgu — bazı bölgelerde PDF link dönebilir
+   * GET /integration/sellers/{sellerId}/common-label/query?id={cargoTrackingNumber}
+   */
+  async getCommonLabelQuery(cargoTrackingNumber: string): Promise<Array<{ format: string; label: string }>> {
+    const tracking = encodeURIComponent(cargoTrackingNumber);
+    const url = `https://apigw.trendyol.com/integration/sellers/${this.credentials.sellerId}/common-label/query?id=${tracking}`;
+
+    try {
+      const response = await axios.get(url, {
+        headers: this.commonHeaders,
+        timeout: 30_000,
+      });
+      const data = response.data?.data;
+      if (!Array.isArray(data)) return [];
+      return data.map((item: any) => ({
+        format: String(item.format ?? 'PDF'),
+        label:  String(item.label ?? ''),
+      })).filter(item => item.label);
+    } catch (error: any) {
+      if (error.response?.status === 404) return [];
+      throw this.formatTrendyolCargoLabelError(error);
+    }
+  }
+
   // BRANDS — official apigw endpoint (same pattern as categories)
   // PROD:  https://apigw.trendyol.com/integration/product/brands
   // STAGE: https://stageapigw.trendyol.com/integration/product/brands

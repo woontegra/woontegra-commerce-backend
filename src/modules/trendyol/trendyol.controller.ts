@@ -6,6 +6,8 @@ import { orderSyncService } from './trendyol-order-sync.service';
 import { syncQueue } from './trendyol-sync-queue.service';
 import { enrichTrendyolOrderDetail } from './trendyol-order-detail.presenter';
 import { trendyolOrderInvoiceService } from './trendyol-order-invoice.service';
+import { trendyolOrderCargoLabelService } from './trendyol-order-cargo-label.service';
+import { parseCargoLabelFormat } from './trendyol-order-cargo-label.util';
 
 const svc = new TrendyolService();
 
@@ -1006,5 +1008,31 @@ export const sendTrendyolOrderInvoiceFile = async (req: Request, res: Response) 
   } catch (err: any) {
     const status = err.statusCode ?? 500;
     res.status(status).json({ success: false, error: err.message ?? 'Fatura PDF yüklenemedi.' });
+  }
+};
+
+/**
+ * GET /api/trendyol/orders/:id/cargo-label?format=A4|STICKER
+ * Trendyol common-label — kargo etiketi.
+ */
+export const getTrendyolOrderCargoLabel = async (req: Request, res: Response) => {
+  try {
+    const tenantId = tid(req);
+    const id       = String(req.params.id ?? '');
+    const format   = parseCargoLabelFormat(req.query.format);
+
+    if (!format) {
+      return res.status(400).json({
+        success: false,
+        error:   'format query parametresi A4 veya STICKER olmalıdır.',
+      });
+    }
+
+    const data = await trendyolOrderCargoLabelService.getCargoLabel(tenantId, id, format);
+
+    res.json({ success: true, data });
+  } catch (err: any) {
+    const status = err.statusCode ?? 500;
+    res.status(status).json({ success: false, error: err.message ?? 'Kargo etiketi alınamadı.' });
   }
 };
