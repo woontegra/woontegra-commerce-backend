@@ -703,9 +703,22 @@ export class OrderService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [total, pending, paid, todayRevenue] = await prisma.$transaction([
+    const [
+      storefrontCount,
+      trendyolCount,
+      storefrontPending,
+      trendyolPending,
+      storefrontPaid,
+      todayRevenue,
+    ] = await Promise.all([
       prisma.order.count({ where: { tenantId } }),
-      prisma.order.count({ where: { tenantId, status: 'PENDING' } }),
+      prisma.trendyolOrder.count({ where: { tenantId } }),
+      prisma.order.count({
+        where: { tenantId, status: { in: ['PENDING', 'PROCESSING'] } },
+      }),
+      prisma.trendyolOrder.count({
+        where: { tenantId, status: { in: ['Created', 'Picking'] } },
+      }),
       prisma.order.count({ where: { tenantId, status: 'PAID' } }),
       prisma.order.aggregate({
         where: {
@@ -717,11 +730,19 @@ export class OrderService {
       }),
     ]);
 
+    const totalCount = storefrontCount + trendyolCount;
+    const pending    = storefrontPending + trendyolPending;
+
     return {
-      total,
+      total:           totalCount,
       pending,
-      paid,
-      todayRevenue: Number(todayRevenue._sum.totalAmount ?? 0),
+      paid:            storefrontPaid,
+      todayRevenue:    Number(todayRevenue._sum.totalAmount ?? 0),
+      storefrontCount,
+      trendyolCount,
+      totalCount,
+      storefrontPending,
+      trendyolPending,
     };
   }
 }

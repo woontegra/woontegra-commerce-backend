@@ -46,6 +46,7 @@ import {
   syncTrendyolOrders,
   getTrendyolOrders,
   getTrendyolOrderDetail,
+  getTrendyolOrderById,
   processSyncQueueManual,
   getSyncQueueStats,
   retrySyncQueue,
@@ -131,6 +132,7 @@ router.get   ('/sync-queue/stats',    trendyolGate, getSyncQueueStats);
 // ── Sipariş Sync ──────────────────────────────────────────────────────────────
 router.post  ('/orders/sync',         trendyolGate, syncTrendyolOrders);
 router.get   ('/orders',              trendyolGate, getTrendyolOrders);
+router.get   ('/orders/by-id/:id',    trendyolGate, getTrendyolOrderById);
 router.get   ('/orders/:orderNumber', trendyolGate, getTrendyolOrderDetail);
 
 // Price strategy (global)

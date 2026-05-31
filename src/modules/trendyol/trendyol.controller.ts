@@ -4,6 +4,7 @@ import { batchStore } from './trendyol.queue';
 import prisma from '../../config/database';
 import { orderSyncService } from './trendyol-order-sync.service';
 import { syncQueue } from './trendyol-sync-queue.service';
+import { enrichTrendyolOrderDetail } from './trendyol-order-detail.presenter';
 
 const svc = new TrendyolService();
 
@@ -910,7 +911,33 @@ export const getTrendyolOrderDetail = async (req: Request, res: Response) => {
     if (!order) {
       return res.status(404).json({ success: false, error: 'Sipariş bulunamadı.' });
     }
-    res.json({ success: true, data: order });
+    const enriched = await enrichTrendyolOrderDetail(order);
+    res.json({ success: true, data: enriched });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * GET /api/trendyol/orders/by-id/:id
+ * Trendyol sipariş detayı (UUID id ile).
+ */
+export const getTrendyolOrderById = async (req: Request, res: Response) => {
+  try {
+    const tenantId = tid(req);
+    const id       = String(req.params.id ?? '');
+
+    const order = await prisma.trendyolOrder.findFirst({
+      where:   { id, tenantId },
+      include: { items: true },
+    });
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Sipariş bulunamadı.' });
+    }
+
+    const enriched = await enrichTrendyolOrderDetail(order);
+    res.json({ success: true, data: enriched });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
