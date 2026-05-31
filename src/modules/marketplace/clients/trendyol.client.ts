@@ -657,4 +657,133 @@ export class TrendyolClient {
       return false;
     }
   }
+
+  // CUSTOMER Q&A — ürün soruları (Trendyol Q&A Integration)
+  private formatTrendyolQuestionError(error: any): Error & { statusCode: number; trendyolStatus?: number } {
+    const status = error.response?.status;
+    const data   = error.response?.data;
+    const detail = typeof data === 'string'
+      ? data
+      : (data?.message ?? data?.error?.message ?? data?.errors?.[0]?.message ?? JSON.stringify(data ?? {}));
+
+    let message: string;
+    let statusCode: number;
+
+    if (status === 401 || status === 403) {
+      message = 'Trendyol API yetkilendirme hatası. Entegrasyon bilgilerinizi kontrol edin.';
+      statusCode = status;
+    } else if (status === 404) {
+      message = 'Trendyol sorusu bulunamadı.';
+      statusCode = 404;
+    } else if (status === 400) {
+      message = detail && detail !== '{}'
+        ? `Trendyol: ${detail}`
+        : 'Geçersiz soru isteği.';
+      statusCode = 422;
+    } else {
+      message = detail && detail !== '{}'
+        ? `Trendyol müşteri sorusu hatası: ${detail}`
+        : `Trendyol müşteri sorusu hatası (${status ?? 'NET'}): ${error.message}`;
+      statusCode = status && status >= 400 && status < 500 ? status : 502;
+    }
+
+    return Object.assign(new Error(message), { statusCode, trendyolStatus: status });
+  }
+
+  /**
+   * Müşteri sorularını filtrele — GET .../qna/sellers/{sellerId}/questions/filter
+   */
+  async getCustomerQuestions(filter: TrendyolQuestionFilter = {}): Promise<TrendyolQuestionListResult> {
+    const sellerId = this.credentials.sellerId;
+    const url = `https://apigw.trendyol.com/integration/qna/sellers/${sellerId}/questions/filter`;
+
+    const params: Record<string, string | number> = {
+      supplierId: sellerId,
+      page:       filter.page ?? 0,
+      size:       Math.min(filter.size ?? 50, 50),
+      orderByField:     filter.orderByField ?? 'CreatedDate',
+      orderByDirection: filter.orderByDirection ?? 'DESC',
+    };
+
+    if (filter.barcode)   params.barcode   = filter.barcode;
+    if (filter.startDate) params.startDate = filter.startDate;
+    if (filter.endDate)   params.endDate   = filter.endDate;
+    if (filter.status)    params.status    = filter.status;
+
+    try {
+      const response = await axios.get(url, {
+        headers: this.commonHeaders,
+        params,
+        timeout: 30_000,
+      });
+      const data = response.data ?? {};
+      const content: unknown[] = Array.isArray(data.content) ? data.content : [];
+
+      return {
+        content,
+        page:          Number(data.page ?? filter.page ?? 0),
+        size:          Number(data.size ?? filter.size ?? 50),
+        totalElements: Number(data.totalElements ?? content.length),
+        totalPages:    Number(data.totalPages ?? 1),
+      };
+    } catch (error: any) {
+      throw this.formatTrendyolQuestionError(error);
+    }
+  }
+
+  /**
+   * Soru detayı — GET .../qna/sellers/{sellerId}/questions/{id}
+   */
+  async getCustomerQuestion(questionId: string | number): Promise<unknown> {
+    const sellerId = this.credentials.sellerId;
+    const id       = encodeURIComponent(String(questionId));
+    const url      = `https://apigw.trendyol.com/integration/qna/sellers/${sellerId}/questions/${id}`;
+
+    try {
+      const response = await axios.get(url, {
+        headers: this.commonHeaders,
+        timeout: 30_000,
+      });
+      return response.data ?? {};
+    } catch (error: any) {
+      throw this.formatTrendyolQuestionError(error);
+    }
+  }
+
+  /**
+   * Soruyu cevapla — POST .../qna/sellers/{sellerId}/questions/{id}/answers
+   */
+  async answerCustomerQuestion(questionId: string | number, text: string): Promise<void> {
+    const sellerId = this.credentials.sellerId;
+    const id       = encodeURIComponent(String(questionId));
+    const url      = `https://apigw.trendyol.com/integration/qna/sellers/${sellerId}/questions/${id}/answers`;
+
+    try {
+      await axios.post(url, { text }, {
+        headers: this.commonHeaders,
+        timeout: 30_000,
+      });
+    } catch (error: any) {
+      throw this.formatTrendyolQuestionError(error);
+    }
+  }
+}
+
+export interface TrendyolQuestionFilter {
+  page?:             number;
+  size?:             number;
+  barcode?:          string;
+  startDate?:        number;
+  endDate?:          number;
+  status?:           string;
+  orderByField?:     string;
+  orderByDirection?: 'ASC' | 'DESC';
+}
+
+export interface TrendyolQuestionListResult {
+  content:         unknown[];
+  page:            number;
+  size:            number;
+  totalElements:   number;
+  totalPages:      number;
 }

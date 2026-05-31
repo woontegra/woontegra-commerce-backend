@@ -53,6 +53,7 @@ import categoryAttributeRoutes  from './modules/attributes/category-attribute.ro
 import campaignRoutes           from './modules/campaigns/campaign.routes';
 import couponRoutes             from './modules/coupons/coupon.routes';
 import trendyolRoutes          from './modules/trendyol/trendyol.routes';
+import marketplaceQuestionRoutes from './modules/marketplace-questions/marketplace-question.routes';
 import reportsRoutes           from './modules/reports/reports.routes';
 import b2bRoutes               from './modules/b2b/b2b.routes';
 import wishlistRoutes          from './modules/wishlist/wishlist.routes';
@@ -225,6 +226,7 @@ app.use('/api/returns',   authenticate, requireTenantAccess, tenantLifecycleGuar
 app.use('/api/campaigns', authenticate, requireTenantAccess, tenantLifecycleGuard, campaignRoutes);
 app.use('/api/coupons',   authenticate, requireTenantAccess, couponRoutes);
 app.use('/api/trendyol',        authenticate, requireTenantAccess, trendyolRoutes);
+app.use('/api/marketplace-questions', authenticate, requireTenantAccess, marketplaceQuestionRoutes);
 app.use('/api/marketplace-hub', authenticate, requireTenantAccess, marketplaceHubRoutes);
 app.use('/api/b2b',             authenticate, requireTenantAccess, tenantLifecycleGuard, b2bRoutes);
 app.use('/api/wishlist',        authenticate, requireTenantAccess, wishlistRoutes);

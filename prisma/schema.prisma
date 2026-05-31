@@ -92,6 +92,7 @@ model Tenant {
   storePaymentSessions   StorePaymentSession[]
   paymentSettings        TenantPaymentSetting[]
   shippingSetting        TenantShippingSetting?
+  marketplaceQuestions   MarketplaceQuestion[]
 
   @@map("tenants")
 }
@@ -437,6 +438,7 @@ model Product {
   productImages     ProductImage[]
   attributeValues   ProductAttributeValue[]
   translations      ProductTranslation[]
+  marketplaceQuestions MarketplaceQuestion[]
 
   @@unique([slug, tenantId])
   @@index([tenantId, status])
@@ -1728,6 +1730,28 @@ enum MarketplaceProvider {
   AMAZON
 }
 
+enum MarketplaceQuestionSource {
+  TRENDYOL
+  HEPSIBURADA
+  N11
+  PAZARAMA
+  WOONTEGRA
+  AMAZON
+}
+
+enum MarketplaceQuestionType {
+  PRODUCT_QUESTION
+  ORDER_QUESTION
+}
+
+enum MarketplaceQuestionStatus {
+  WAITING_ANSWER
+  PENDING_APPROVAL
+  ANSWERED
+  EXPIRED
+  CLOSED
+}
+
 enum MarketplaceSyncStatus {
   PENDING
   PROCESSING
@@ -2220,4 +2244,46 @@ model PlatformLogEntry {
   @@index([traceId])
   @@index([event, createdAt(sort: Desc)])
   @@map("platform_log_entries")
+}
+
+// ─── Pazaryeri müşteri soruları (genel; Trendyol, HB, N11, …) ───────────────
+
+model MarketplaceQuestion {
+  id                 String                    @id @default(uuid())
+  tenantId           String
+  source             MarketplaceQuestionSource
+  type               MarketplaceQuestionType   @default(PRODUCT_QUESTION)
+  externalQuestionId String
+  externalStatus     String?
+  status             MarketplaceQuestionStatus
+  questionText       String                    @db.Text
+  answerText         String?                   @db.Text
+  customerName       String?
+  customerId         String?
+  productName        String?
+  barcode            String?
+  externalProductId  String?
+  externalOrderId    String?
+  productId          String?
+  orderId            String?
+  askedAt            DateTime
+  answeredAt         DateTime?
+  lastSyncedAt       DateTime?
+  rawPayload         Json?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, source, externalQuestionId])
+  @@index([tenantId])
+  @@index([source])
+  @@index([type])
+  @@index([status])
+  @@index([askedAt])
+  @@index([barcode])
+  @@index([productId])
+  @@index([orderId])
+  @@map("marketplace_questions")
 }
