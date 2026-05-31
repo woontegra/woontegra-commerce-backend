@@ -1,3 +1,10 @@
+export const MAX_TRENDYOL_INVOICE_FILE_BYTES = 10 * 1024 * 1024;
+
+/** PDF magic bytes kontrolü. */
+export function isValidPdfBuffer(buffer: Buffer): boolean {
+  return buffer.length >= 5 && buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+}
+
 /** Trendyol sipariş rawPayload içinden shipmentPackageId çıkarır. */
 export function extractShipmentPackageId(rawPayload: unknown): number | null {
   if (!rawPayload || typeof rawPayload !== 'object') return null;

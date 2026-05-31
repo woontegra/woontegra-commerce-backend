@@ -970,3 +970,41 @@ export const sendTrendyolOrderInvoiceLink = async (req: Request, res: Response) 
     res.status(status).json({ success: false, error: err.message ?? 'Fatura linki gönderilemedi.' });
   }
 };
+
+/**
+ * POST /api/trendyol/orders/:id/invoice/file
+ * Trendyol uploadInvoiceFile — PDF fatura yükleme.
+ */
+export const sendTrendyolOrderInvoiceFile = async (req: Request, res: Response) => {
+  try {
+    const tenantId = tid(req);
+    const id       = String(req.params.id ?? '');
+    const upload   = req.file;
+
+    if (!upload) {
+      return res.status(400).json({ success: false, error: 'PDF fatura dosyası zorunludur.' });
+    }
+
+    const { invoiceNumber, invoiceDateTime } = req.body ?? {};
+
+    const data = await trendyolOrderInvoiceService.uploadInvoiceFile(tenantId, id, {
+      file: {
+        buffer:       upload.buffer,
+        originalname: upload.originalname,
+        mimetype:     upload.mimetype,
+        size:         upload.size,
+      },
+      invoiceNumber,
+      invoiceDateTime,
+    });
+
+    res.json({
+      success: true,
+      message: 'Fatura PDF Trendyol\'a yüklendi.',
+      data,
+    });
+  } catch (err: any) {
+    const status = err.statusCode ?? 500;
+    res.status(status).json({ success: false, error: err.message ?? 'Fatura PDF yüklenemedi.' });
+  }
+};

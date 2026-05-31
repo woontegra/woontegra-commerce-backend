@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { checkPlanFeature } from '../features/feature.middleware';
+import { trendyolInvoiceFileUpload } from './trendyol-invoice-upload.middleware';
 import {
   getShippingDefaults,
   saveShippingDefaults,
@@ -48,6 +49,7 @@ import {
   getTrendyolOrderDetail,
   getTrendyolOrderById,
   sendTrendyolOrderInvoiceLink,
+  sendTrendyolOrderInvoiceFile,
   processSyncQueueManual,
   getSyncQueueStats,
   retrySyncQueue,
@@ -135,6 +137,7 @@ router.post  ('/orders/sync',         trendyolGate, syncTrendyolOrders);
 router.get   ('/orders',              trendyolGate, getTrendyolOrders);
 router.get   ('/orders/by-id/:id',    trendyolGate, getTrendyolOrderById);
 router.post  ('/orders/:id/invoice/link', trendyolGate, sendTrendyolOrderInvoiceLink);
+router.post  ('/orders/:id/invoice/file', trendyolGate, trendyolInvoiceFileUpload, sendTrendyolOrderInvoiceFile);
 router.get   ('/orders/:orderNumber', trendyolGate, getTrendyolOrderDetail);
 
 // Price strategy (global)

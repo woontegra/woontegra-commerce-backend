@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import crypto from 'crypto';
+import FormData from 'form-data';
 
 export interface TrendyolCredentials {
   apiKey: string;
@@ -169,6 +170,55 @@ export class TrendyolClient {
       'User-Agent':    `${this.credentials.sellerId} - SelfIntegration`,
       'SupplierId':    String(this.credentials.sellerId),
     };
+  }
+
+  private get multipartHeaders() {
+    return {
+      'Authorization': this.authHeader,
+      'Accept':        'application/json',
+      'User-Agent':    `${this.credentials.sellerId} - SelfIntegration`,
+      'SupplierId':    String(this.credentials.sellerId),
+    };
+  }
+
+  private formatTrendyolInvoiceError(error: any, label: string): Error {
+    const status = error.response?.status;
+    const data   = error.response?.data;
+    const detail = typeof data === 'string'
+      ? data
+      : (data?.message ?? data?.errors?.[0]?.message ?? JSON.stringify(data ?? {}));
+
+    if (status === 409) {
+      return new Error(
+        'Bu paket için fatura zaten gönderilmiş. Trendyol panelinden kontrol edin.',
+      );
+    }
+    if (status === 404) {
+      return new Error(
+        'Trendyol paketi bulunamadı. Siparişi yeniden senkronize edip tekrar deneyin.',
+      );
+    }
+    if (status === 403) {
+      return new Error('Bu paket belirtilen satıcıya ait değil.');
+    }
+    if (status === 400 && typeof detail === 'string') {
+      if (/micro|mikro|invoice information is required/i.test(detail)) {
+        return new Error(
+          'Mikro ihracat siparişi için fatura no ve fatura tarihi zorunludur.',
+        );
+      }
+      if (/file size|10\s*mb/i.test(detail)) {
+        return new Error('Fatura dosyası en fazla 10 MB olabilir.');
+      }
+      if (/file type|not supported|pdf/i.test(detail)) {
+        return new Error('Geçersiz dosya formatı. Sadece PDF yükleyebilirsiniz.');
+      }
+      if (/file not sent|select the invoice file/i.test(detail)) {
+        return new Error('PDF fatura dosyası seçilmedi.');
+      }
+    }
+
+    return new Error(`Trendyol ${label} gönderilemedi (${status ?? 'NET'}): ${detail || error.message}`);
   }
 
   // CATEGORIES — official Trendyol Integration Gateway (apigw)
@@ -439,18 +489,53 @@ export class TrendyolClient {
         timeout: 30_000,
       });
     } catch (error: any) {
-      const status = error.response?.status;
-      const data   = error.response?.data;
-      const detail = typeof data === 'string'
-        ? data
-        : (data?.message ?? data?.errors?.[0]?.message ?? JSON.stringify(data ?? {}));
-      if (status === 409) {
+      if (error.response?.status === 409) {
         throw new Error(
           'Bu paket için fatura zaten gönderilmiş veya link başka bir siparişte kullanılıyor. '
           + 'Trendyol panelinden kontrol edin.',
         );
       }
-      throw new Error(`Trendyol fatura linki gönderilemedi (${status ?? 'NET'}): ${detail || error.message}`);
+      throw this.formatTrendyolInvoiceError(error, 'fatura linki');
+    }
+  }
+
+  /**
+   * Trendyol fatura dosyası yükleme — uploadInvoiceFile
+   * POST /integration/sellers/{sellerId}/seller-invoice-file
+   */
+  async uploadInvoiceFile(payload: {
+    shipmentPackageId: number;
+    file:              { buffer: Buffer; originalname: string; mimetype: string };
+    invoiceNumber?:    string;
+    invoiceDateTime?:  number;
+  }): Promise<void> {
+    const url = `https://apigw.trendyol.com/integration/sellers/${this.credentials.sellerId}/seller-invoice-file`;
+
+    const form = new FormData();
+    form.append('shipmentPackageId', String(payload.shipmentPackageId));
+    form.append('file', payload.file.buffer, {
+      filename:    payload.file.originalname || 'invoice.pdf',
+      contentType: payload.file.mimetype || 'application/pdf',
+    });
+    if (payload.invoiceNumber?.trim()) {
+      form.append('invoiceNumber', payload.invoiceNumber.trim());
+    }
+    if (payload.invoiceDateTime != null) {
+      form.append('invoiceDateTime', String(payload.invoiceDateTime));
+    }
+
+    try {
+      await axios.post(url, form, {
+        headers: {
+          ...this.multipartHeaders,
+          ...form.getHeaders(),
+        },
+        timeout:           60_000,
+        maxBodyLength:     Infinity,
+        maxContentLength:  Infinity,
+      });
+    } catch (error: any) {
+      throw this.formatTrendyolInvoiceError(error, 'fatura dosyası');
     }
   }
 
