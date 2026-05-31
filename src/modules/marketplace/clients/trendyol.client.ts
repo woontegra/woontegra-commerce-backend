@@ -540,7 +540,7 @@ export class TrendyolClient {
   }
 
   // COMMON LABEL — kargo etiketi (createCommonLabel + getCommonLabel)
-  private formatTrendyolCargoLabelError(error: any): Error & { statusCode: number } {
+  private formatTrendyolCargoLabelError(error: any): Error & { statusCode: number; trendyolStatus?: number } {
     const status = error.response?.status;
     const data   = error.response?.data;
     const detail = typeof data === 'string'
@@ -551,21 +551,27 @@ export class TrendyolClient {
     let statusCode: number;
 
     if (status === 400) {
-      message = 'Kargo takip numarası geçersiz veya etiket henüz oluşturulmamış. '
-        + 'Siparişi senkronize edip tekrar deneyin.';
+      message = detail && detail !== '{}'
+        ? `Trendyol: ${detail}`
+        : 'Kargo takip numarası geçersiz veya etiket henüz oluşturulmamış. Siparişi senkronize edip tekrar deneyin.';
       statusCode = 422;
     } else if (status === 404) {
-      message = 'Trendyol kargo etiketi bulunamadı. Etiket oluşturulması birkaç saniye sürebilir.';
+      message = 'Trendyol kargo etiketi bulunamadı. Önce etiket talebi oluşturulmalı.';
       statusCode = 422;
-    } else if (status === 401 || status === 403) {
+    } else if (status === 403) {
+      message = 'Bu sipariş için Trendyol common label desteklenmiyor. Kargo firması/modeli uygun olmayabilir.';
+      statusCode = 422;
+    } else if (status === 401) {
       message = 'Trendyol API yetkilendirme hatası. Entegrasyon bilgilerinizi kontrol edin.';
-      statusCode = status;
+      statusCode = 401;
     } else {
-      message = `Trendyol kargo etiketi alınamadı (${status ?? 'NET'}): ${detail || error.message}`;
+      message = detail && detail !== '{}'
+        ? `Trendyol kargo etiketi alınamadı: ${detail}`
+        : `Trendyol kargo etiketi alınamadı (${status ?? 'NET'}): ${error.message}`;
       statusCode = status && status >= 400 && status < 500 ? status : 502;
     }
 
-    return Object.assign(new Error(message), { statusCode });
+    return Object.assign(new Error(message), { statusCode, trendyolStatus: status });
   }
 
   /**
@@ -583,8 +589,7 @@ export class TrendyolClient {
       });
     } catch (error: any) {
       const status = error.response?.status;
-      // 400: henüz hazır değil / zaten talep edilmiş — GET ile devam
-      if (status === 409 || status === 400) return;
+      if (status === 409) return;
       throw this.formatTrendyolCargoLabelError(error);
     }
   }
@@ -609,31 +614,6 @@ export class TrendyolClient {
         label:  String(item.label ?? ''),
       })).filter(item => item.label);
     } catch (error: any) {
-      throw this.formatTrendyolCargoLabelError(error);
-    }
-  }
-
-  /**
-   * Ortak etiket sorgu — bazı bölgelerde PDF link dönebilir
-   * GET /integration/sellers/{sellerId}/common-label/query?id={cargoTrackingNumber}
-   */
-  async getCommonLabelQuery(cargoTrackingNumber: string): Promise<Array<{ format: string; label: string }>> {
-    const tracking = encodeURIComponent(cargoTrackingNumber);
-    const url = `https://apigw.trendyol.com/integration/sellers/${this.credentials.sellerId}/common-label/query?id=${tracking}`;
-
-    try {
-      const response = await axios.get(url, {
-        headers: this.commonHeaders,
-        timeout: 30_000,
-      });
-      const data = response.data?.data;
-      if (!Array.isArray(data)) return [];
-      return data.map((item: any) => ({
-        format: String(item.format ?? 'PDF'),
-        label:  String(item.label ?? ''),
-      })).filter(item => item.label);
-    } catch (error: any) {
-      if (error.response?.status === 404) return [];
       throw this.formatTrendyolCargoLabelError(error);
     }
   }

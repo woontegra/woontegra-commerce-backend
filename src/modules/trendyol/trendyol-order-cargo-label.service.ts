@@ -3,8 +3,9 @@ import { TrendyolClient } from '../marketplace/clients/trendyol.client';
 import { decryptTrendyolCredentials } from '../../common/crypto/marketplace-credential.crypto';
 import {
   extractCargoTrackingNumber,
+  extractCargoLabelOrderContext,
   isPdfUrl,
-  type CargoLabelRequestFormat,
+  sleep,
 } from './trendyol-order-cargo-label.util';
 
 export type CargoLabelDeliveryType = 'pdf_url' | 'zpl' | 'pdf_base64';
@@ -16,10 +17,10 @@ export interface CargoLabelItemResult {
 }
 
 export interface CargoLabelResult {
-  requestedFormat: CargoLabelRequestFormat;
-  deliveryType:    CargoLabelDeliveryType;
+  deliveryType:        CargoLabelDeliveryType;
   cargoTrackingNumber: string;
-  labels:          CargoLabelItemResult[];
+  cargoProviderName:   string | null;
+  labels:              CargoLabelItemResult[];
 }
 
 async function loadCargoLabelClient(tenantId: string, orderId: string) {
@@ -34,6 +35,28 @@ async function loadCargoLabelClient(tenantId: string, orderId: string) {
   if (!cargoTrackingNumber) {
     throw Object.assign(
       new Error('Kargo takip numarası bulunamadı. Siparişi yeniden senkronize edin.'),
+      { statusCode: 422 },
+    );
+  }
+
+  const cargoCtx = extractCargoLabelOrderContext(order.rawPayload, order.status);
+
+  if (!cargoCtx.isLikelySupported) {
+    throw Object.assign(
+      new Error(
+        'Bu sipariş için Trendyol common label desteklenmiyor. '
+        + `Kargo firması (${cargoCtx.cargoProviderName ?? 'bilinmiyor'}) TEX/Aras Trendyol öder modeline uygun olmayabilir.`,
+      ),
+      { statusCode: 422 },
+    );
+  }
+
+  if (!cargoCtx.isLabelReadyStatus) {
+    throw Object.assign(
+      new Error(
+        'Kargo etiketi için sipariş durumu PICKING veya INVOICED olmalıdır. '
+        + `Mevcut durum: ${order.status}. Trendyol panelinde paketi hazırlanıyor/faturalandı aşamasına alın.`,
+      ),
       { statusCode: 422 },
     );
   }
@@ -61,7 +84,7 @@ async function loadCargoLabelClient(tenantId: string, orderId: string) {
     sellerId:  creds.sellerId,
   });
 
-  return { order, cargoTrackingNumber, client };
+  return { order, cargoTrackingNumber, cargoCtx, client };
 }
 
 function normalizeLabelItems(
@@ -79,79 +102,100 @@ function normalizeLabelItems(
 function pickDeliveryType(labels: CargoLabelItemResult[]): CargoLabelDeliveryType {
   if (labels.some(l => l.url)) return 'pdf_url';
   if (labels.some(l => l.format.toUpperCase() === 'PDF' && l.content.startsWith('http'))) return 'pdf_url';
-  if (labels.some(l => l.format.toUpperCase() === 'ZPL')) return 'zpl';
   if (labels.some(l => l.content.startsWith('%PDF'))) return 'pdf_base64';
   return 'zpl';
 }
 
+function isMissingLabelError(err: unknown): boolean {
+  const e = err as Error & { statusCode?: number; trendyolStatus?: number };
+  return e.statusCode === 422 || e.trendyolStatus === 400 || e.trendyolStatus === 404;
+}
+
+async function fetchCommonLabelWithRetry(
+  client: TrendyolClient,
+  cargoTrackingNumber: string,
+  afterCreate: boolean,
+): Promise<Array<{ format: string; label: string }>> {
+  const attempts = afterCreate ? 3 : 1;
+  let lastError: unknown;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const items = await client.getCommonLabel(cargoTrackingNumber);
+      if (items.length) return items;
+    } catch (err) {
+      lastError = err;
+      if (!isMissingLabelError(err)) throw err;
+    }
+
+    if (afterCreate && i < attempts - 1) {
+      await sleep(2000);
+    }
+  }
+
+  if (lastError) throw lastError;
+  return [];
+}
+
 export class TrendyolOrderCargoLabelService {
 
-  async getCargoLabel(
-    tenantId: string,
-    orderId: string,
-    requestedFormat: CargoLabelRequestFormat,
-  ): Promise<CargoLabelResult> {
-    const { order, cargoTrackingNumber, client } = await loadCargoLabelClient(tenantId, orderId);
+  /**
+   * Trendyol common-label akışı:
+   * 1) getCommonLabel
+   * 2) yoksa createCommonLabel (ZPL)
+   * 3) tekrar getCommonLabel (+ kısa retry)
+   */
+  async getCargoLabel(tenantId: string, orderId: string): Promise<CargoLabelResult> {
+    const { order, cargoTrackingNumber, cargoCtx, client } = await loadCargoLabelClient(tenantId, orderId);
 
     const logBase = {
       cargoTrackingNumber,
-      requestedFormat,
-      orderNumber: order.orderNumber,
+      orderNumber:       order.orderNumber,
+      cargoProviderName: cargoCtx.cargoProviderName,
+      orderStatus:       order.status,
     };
 
-    try {
-      await client.createCommonLabel(cargoTrackingNumber);
-    } catch {
-      // create başarısız olsa bile GET denenebilir
-    }
-
     let rawItems: Array<{ format: string; label: string }> = [];
-    let fetchError: (Error & { statusCode?: number }) | null = null;
+    let created = false;
 
-    if (requestedFormat === 'A4') {
-      try {
-        rawItems = await client.getCommonLabelQuery(cargoTrackingNumber);
-      } catch (err: any) {
-        fetchError = err;
+    try {
+      rawItems = await fetchCommonLabelWithRetry(client, cargoTrackingNumber, false);
+    } catch (err: any) {
+      if (!isMissingLabelError(err)) {
+        await this.logError(tenantId, order.orderNumber, logBase, err);
+        throw err;
       }
     }
 
     if (!rawItems.length) {
       try {
-        rawItems = await client.getCommonLabel(cargoTrackingNumber);
-        fetchError = null;
+        await client.createCommonLabel(cargoTrackingNumber);
+        created = true;
       } catch (err: any) {
-        fetchError = err;
+        await this.logError(tenantId, order.orderNumber, logBase, err);
+        throw err;
       }
-    }
 
-    if (!rawItems.length && fetchError) {
-      await prisma.integrationLog.create({
-        data: {
-          tenantId,
-          status:          'error',
-          message:         `Kargo etiketi alma hatası: ${order.orderNumber} — ${fetchError.message}`,
-          requestPayload:  logBase,
-          responsePayload: { error: fetchError.message },
-        },
-      }).catch(() => {});
-      throw fetchError;
+      await sleep(1500);
+
+      try {
+        rawItems = await fetchCommonLabelWithRetry(client, cargoTrackingNumber, true);
+      } catch (err: any) {
+        await this.logError(tenantId, order.orderNumber, { ...logBase, created }, err);
+        throw err;
+      }
     }
 
     if (!rawItems.length) {
       const err = Object.assign(
-        new Error('Trendyol kargo etiketi döndürmedi. Birkaç saniye sonra tekrar deneyin.'),
+        new Error(
+          created
+            ? 'Etiket talebi oluşturuldu ancak Trendyol henüz ZPL etiket döndürmedi. Birkaç saniye sonra tekrar deneyin.'
+            : 'Trendyol kargo etiketi döndürmedi. Siparişi senkronize edip tekrar deneyin.',
+        ),
         { statusCode: 422 },
       );
-      await prisma.integrationLog.create({
-        data: {
-          tenantId,
-          status:          'error',
-          message:         `Kargo etiketi boş: ${order.orderNumber}`,
-          requestPayload:  logBase,
-          responsePayload: { error: err.message },
-        },
-      }).catch(() => {});
+      await this.logError(tenantId, order.orderNumber, { ...logBase, created }, err);
       throw err;
     }
 
@@ -162,8 +206,8 @@ export class TrendyolOrderCargoLabelService {
       data: {
         tenantId,
         status:          'success',
-        message:         `Kargo etiketi alındı (${requestedFormat}): ${order.orderNumber}`,
-        requestPayload:  logBase,
+        message:         `Kargo etiketi alındı (ZPL): ${order.orderNumber}`,
+        requestPayload:  { ...logBase, created },
         responsePayload: {
           deliveryType,
           labelCount: labels.length,
@@ -173,11 +217,31 @@ export class TrendyolOrderCargoLabelService {
     }).catch(() => {});
 
     return {
-      requestedFormat,
       deliveryType,
       cargoTrackingNumber,
+      cargoProviderName: cargoCtx.cargoProviderName,
       labels,
     };
+  }
+
+  private async logError(
+    tenantId: string,
+    orderNumber: string,
+    requestPayload: object,
+    err: any,
+  ) {
+    await prisma.integrationLog.create({
+      data: {
+        tenantId,
+        status:          'error',
+        message:         `Kargo etiketi hatası: ${orderNumber} — ${err.message}`,
+        requestPayload,
+        responsePayload: {
+          error:          err.message,
+          trendyolStatus: err.trendyolStatus ?? null,
+        },
+      },
+    }).catch(() => {});
   }
 }
 

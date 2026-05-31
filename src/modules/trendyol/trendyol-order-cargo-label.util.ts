@@ -37,15 +37,67 @@ export function extractCargoTrackingNumber(
   return null;
 }
 
-export type CargoLabelRequestFormat = 'A4' | 'STICKER';
+const COMMON_LABEL_CARRIER_PATTERNS = [
+  /tex/i,
+  /trendyol express/i,
+  /aras/i,
+];
 
-export function parseCargoLabelFormat(value: unknown): CargoLabelRequestFormat | null {
-  const fmt = String(value ?? '').trim().toUpperCase();
-  if (fmt === 'A4' || fmt === 'STICKER') return fmt;
-  return null;
+const LABEL_READY_STATUSES = new Set([
+  'PICKING',
+  'INVOICED',
+  'SHIPPED',
+  'DELIVERED',
+]);
+
+export interface CargoLabelOrderContext {
+  cargoProviderName: string | null;
+  orderStatus:       string;
+  isLikelySupported: boolean;
+  isLabelReadyStatus: boolean;
+}
+
+export function extractCargoLabelOrderContext(
+  rawPayload: unknown,
+  orderStatus: string,
+): CargoLabelOrderContext {
+  const raw = (rawPayload && typeof rawPayload === 'object')
+    ? rawPayload as Record<string, unknown>
+    : {};
+
+  const cargoProviderName = [
+    raw.cargoProviderName,
+    raw.cargoProvider,
+    raw.shipmentPackage && typeof raw.shipmentPackage === 'object'
+      ? (raw.shipmentPackage as Record<string, unknown>).cargoProviderName
+      : null,
+  ]
+    .map(v => (v != null ? String(v).trim() : ''))
+    .find(Boolean) ?? null;
+
+  const statusNorm = String(orderStatus ?? raw.status ?? raw.shipmentPackageStatus ?? '')
+    .trim()
+    .toUpperCase();
+
+  const isLikelySupported = cargoProviderName
+    ? COMMON_LABEL_CARRIER_PATTERNS.some(p => p.test(cargoProviderName))
+    : true;
+
+  const isLabelReadyStatus = LABEL_READY_STATUSES.has(statusNorm);
+
+  return {
+    cargoProviderName,
+    orderStatus: statusNorm || String(orderStatus ?? ''),
+    isLikelySupported,
+    isLabelReadyStatus,
+  };
 }
 
 export function isPdfUrl(label: string): boolean {
   const trimmed = label.trim();
   return /^https?:\/\//i.test(trimmed) && /\.pdf(\?|$)/i.test(trimmed);
+}
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
