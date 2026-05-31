@@ -540,27 +540,32 @@ export class TrendyolClient {
   }
 
   // COMMON LABEL — kargo etiketi (createCommonLabel + getCommonLabel)
-  private formatTrendyolCargoLabelError(error: any): Error {
+  private formatTrendyolCargoLabelError(error: any): Error & { statusCode: number } {
     const status = error.response?.status;
     const data   = error.response?.data;
     const detail = typeof data === 'string'
       ? data
       : (data?.message ?? data?.error?.message ?? data?.errors?.[0]?.message ?? JSON.stringify(data ?? {}));
 
+    let message: string;
+    let statusCode: number;
+
     if (status === 400) {
-      return new Error(
-        'Kargo takip numarası geçersiz veya etiket henüz oluşturulmamış. '
-        + 'Siparişi senkronize edip tekrar deneyin.',
-      );
-    }
-    if (status === 404) {
-      return new Error('Trendyol kargo etiketi bulunamadı.');
-    }
-    if (status === 401 || status === 403) {
-      return new Error('Trendyol API yetkilendirme hatası. Entegrasyon bilgilerinizi kontrol edin.');
+      message = 'Kargo takip numarası geçersiz veya etiket henüz oluşturulmamış. '
+        + 'Siparişi senkronize edip tekrar deneyin.';
+      statusCode = 422;
+    } else if (status === 404) {
+      message = 'Trendyol kargo etiketi bulunamadı. Etiket oluşturulması birkaç saniye sürebilir.';
+      statusCode = 422;
+    } else if (status === 401 || status === 403) {
+      message = 'Trendyol API yetkilendirme hatası. Entegrasyon bilgilerinizi kontrol edin.';
+      statusCode = status;
+    } else {
+      message = `Trendyol kargo etiketi alınamadı (${status ?? 'NET'}): ${detail || error.message}`;
+      statusCode = status && status >= 400 && status < 500 ? status : 502;
     }
 
-    return new Error(`Trendyol kargo etiketi alınamadı (${status ?? 'NET'}): ${detail || error.message}`);
+    return Object.assign(new Error(message), { statusCode });
   }
 
   /**
@@ -577,8 +582,9 @@ export class TrendyolClient {
         timeout: 30_000,
       });
     } catch (error: any) {
-      // Etiket zaten oluşturulmuş olabilir — GET ile devam edilebilir
-      if (error.response?.status === 409) return;
+      const status = error.response?.status;
+      // 400: henüz hazır değil / zaten talep edilmiş — GET ile devam
+      if (status === 409 || status === 400) return;
       throw this.formatTrendyolCargoLabelError(error);
     }
   }

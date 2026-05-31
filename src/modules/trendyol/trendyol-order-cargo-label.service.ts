@@ -45,7 +45,16 @@ async function loadCargoLabelClient(tenantId: string, orderId: string) {
     throw Object.assign(new Error('Aktif Trendyol entegrasyonu bulunamadı.'), { statusCode: 422 });
   }
 
-  const creds  = decryptTrendyolCredentials(integration);
+  let creds;
+  try {
+    creds = decryptTrendyolCredentials(integration);
+  } catch (err: any) {
+    throw Object.assign(
+      new Error(err.message ?? 'Trendyol entegrasyon kimlik bilgileri okunamadı.'),
+      { statusCode: 500 },
+    );
+  }
+
   const client = new TrendyolClient({
     apiKey:    creds.apiKey,
     apiSecret: creds.apiSecret,
@@ -93,29 +102,40 @@ export class TrendyolOrderCargoLabelService {
     try {
       await client.createCommonLabel(cargoTrackingNumber);
     } catch {
-      // Etiket daha önce oluşturulmuş olabilir — GET ile devam et
+      // create başarısız olsa bile GET denenebilir
     }
 
     let rawItems: Array<{ format: string; label: string }> = [];
+    let fetchError: (Error & { statusCode?: number }) | null = null;
 
-    try {
-      if (requestedFormat === 'A4') {
+    if (requestedFormat === 'A4') {
+      try {
         rawItems = await client.getCommonLabelQuery(cargoTrackingNumber);
+      } catch (err: any) {
+        fetchError = err;
       }
-      if (!rawItems.length) {
+    }
+
+    if (!rawItems.length) {
+      try {
         rawItems = await client.getCommonLabel(cargoTrackingNumber);
+        fetchError = null;
+      } catch (err: any) {
+        fetchError = err;
       }
-    } catch (err: any) {
+    }
+
+    if (!rawItems.length && fetchError) {
       await prisma.integrationLog.create({
         data: {
           tenantId,
           status:          'error',
-          message:         `Kargo etiketi alma hatası: ${order.orderNumber} — ${err.message}`,
+          message:         `Kargo etiketi alma hatası: ${order.orderNumber} — ${fetchError.message}`,
           requestPayload:  logBase,
-          responsePayload: { error: err.message },
+          responsePayload: { error: fetchError.message },
         },
       }).catch(() => {});
-      throw err;
+      throw fetchError;
     }
 
     if (!rawItems.length) {
