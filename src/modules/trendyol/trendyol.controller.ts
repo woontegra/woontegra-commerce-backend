@@ -5,6 +5,7 @@ import prisma from '../../config/database';
 import { orderSyncService } from './trendyol-order-sync.service';
 import { syncQueue } from './trendyol-sync-queue.service';
 import { enrichTrendyolOrderDetail } from './trendyol-order-detail.presenter';
+import { trendyolOrderInvoiceService } from './trendyol-order-invoice.service';
 
 const svc = new TrendyolService();
 
@@ -940,5 +941,32 @@ export const getTrendyolOrderById = async (req: Request, res: Response) => {
     res.json({ success: true, data: enriched });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * POST /api/trendyol/orders/:id/invoice/link
+ * Trendyol sendInvoiceLink — fatura linki gönderimi.
+ */
+export const sendTrendyolOrderInvoiceLink = async (req: Request, res: Response) => {
+  try {
+    const tenantId = tid(req);
+    const id       = String(req.params.id ?? '');
+    const { invoiceLink, invoiceNumber, invoiceDateTime } = req.body ?? {};
+
+    const data = await trendyolOrderInvoiceService.sendInvoiceLink(tenantId, id, {
+      invoiceLink,
+      invoiceNumber,
+      invoiceDateTime,
+    });
+
+    res.json({
+      success: true,
+      message: 'Fatura linki Trendyol\'a gönderildi.',
+      data,
+    });
+  } catch (err: any) {
+    const status = err.statusCode ?? 500;
+    res.status(status).json({ success: false, error: err.message ?? 'Fatura linki gönderilemedi.' });
   }
 };

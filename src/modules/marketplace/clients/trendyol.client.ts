@@ -410,6 +410,50 @@ export class TrendyolClient {
     }
   }
 
+  /**
+   * Trendyol fatura linki gönderimi — sendInvoiceLink
+   * POST /integration/sellers/{sellerId}/seller-invoice-links
+   */
+  async sendInvoiceLink(payload: {
+    shipmentPackageId: number;
+    invoiceLink:       string;
+    invoiceNumber?:    string;
+    invoiceDateTime?:  number;
+  }): Promise<void> {
+    const url = `https://apigw.trendyol.com/integration/sellers/${this.credentials.sellerId}/seller-invoice-links`;
+
+    const body: Record<string, unknown> = {
+      shipmentPackageId: payload.shipmentPackageId,
+      invoiceLink:       payload.invoiceLink,
+    };
+    if (payload.invoiceNumber?.trim()) {
+      body.invoiceNumber = payload.invoiceNumber.trim();
+    }
+    if (payload.invoiceDateTime != null) {
+      body.invoiceDateTime = payload.invoiceDateTime;
+    }
+
+    try {
+      await axios.post(url, body, {
+        headers: this.commonHeaders,
+        timeout: 30_000,
+      });
+    } catch (error: any) {
+      const status = error.response?.status;
+      const data   = error.response?.data;
+      const detail = typeof data === 'string'
+        ? data
+        : (data?.message ?? data?.errors?.[0]?.message ?? JSON.stringify(data ?? {}));
+      if (status === 409) {
+        throw new Error(
+          'Bu paket için fatura zaten gönderilmiş veya link başka bir siparişte kullanılıyor. '
+          + 'Trendyol panelinden kontrol edin.',
+        );
+      }
+      throw new Error(`Trendyol fatura linki gönderilemedi (${status ?? 'NET'}): ${detail || error.message}`);
+    }
+  }
+
   // BRANDS — official apigw endpoint (same pattern as categories)
   // PROD:  https://apigw.trendyol.com/integration/product/brands
   // STAGE: https://stageapigw.trendyol.com/integration/product/brands
