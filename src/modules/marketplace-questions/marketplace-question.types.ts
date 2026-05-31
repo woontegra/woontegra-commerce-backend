@@ -69,6 +69,11 @@ export interface MarketplaceQuestionSyncResult {
   errors:       number;
 }
 
+export interface MarketplaceQuestionStats {
+  /** Cevap bekleyen ürün soruları (badge için) */
+  waitingAnswer: number;
+}
+
 export interface ExternalQuestionRecord {
   externalQuestionId: string;
   externalStatus:     string | null;

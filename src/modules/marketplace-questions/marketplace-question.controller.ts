@@ -54,6 +54,23 @@ export const listMarketplaceQuestions = async (req: Request, res: Response) => {
 };
 
 /**
+ * GET /api/marketplace-questions/stats
+ */
+export const getMarketplaceQuestionStats = async (req: Request, res: Response) => {
+  try {
+    const tenantId = tid(req);
+    const source   = parseEnum<MarketplaceQuestionSource>(req.query.source ?? 'TRENDYOL', VALID_SOURCES)
+      ?? 'TRENDYOL';
+
+    const data = await marketplaceQuestionService.getStats(tenantId, source);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    const status = err.statusCode ?? 500;
+    res.status(status).json({ success: false, error: err.message ?? 'İstatistikler alınamadı.' });
+  }
+};
+
+/**
  * GET /api/marketplace-questions/:id
  */
 export const getMarketplaceQuestion = async (req: Request, res: Response) => {

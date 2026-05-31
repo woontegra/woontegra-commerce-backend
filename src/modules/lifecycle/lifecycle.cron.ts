@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { logger } from '../../config/logger';
 import { orderSyncService } from '../trendyol/trendyol-order-sync.service';
 import { syncQueue } from '../trendyol/trendyol-sync-queue.service';
+import { marketplaceQuestionService } from '../marketplace-questions/marketplace-question.service';
 
 const prisma = new PrismaClient();
 
@@ -117,6 +118,17 @@ export function startLifecycleCron() {
     }
   }, { timezone: 'Europe/Istanbul' });
   logger.info({ message: '[PriceStock Sync Cron] Scheduled (her 2 dakika)' });
+
+  // Every 10 minutes — Trendyol müşteri soruları sync
+  cron.schedule('*/10 * * * *', async () => {
+    logger.info({ message: '[Question Sync Cron] Trendyol müşteri soruları sync başlıyor' });
+    try {
+      await marketplaceQuestionService.syncAllTenants();
+    } catch (err: any) {
+      logger.error({ message: '[Question Sync Cron] Hata', err: err.message });
+    }
+  }, { timezone: 'Europe/Istanbul' });
+  logger.info({ message: '[Question Sync Cron] Scheduled (her 10 dakika)' });
 
   // Daily cleanup — 1 haftadan eski "success" kayıtları sil
   cron.schedule('30 2 * * *', async () => {

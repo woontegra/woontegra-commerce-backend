@@ -1,5 +1,6 @@
 import type { MarketplaceQuestionSource, Prisma } from '@prisma/client';
 import prisma from '../../config/database';
+import { logger } from '../../config/logger';
 import { toMarketplaceQuestionDTO } from './marketplace-question.mapper';
 import type {
   MarketplaceQuestionListQuery,
@@ -8,6 +9,7 @@ import type {
   ExternalQuestionRecord,
   AnswerQuestionInput,
 } from './marketplace-question.types';
+import type { MarketplaceQuestionStats } from './marketplace-question.types';
 import {
   MARKETPLACE_ANSWER_MIN_LENGTH,
   MARKETPLACE_ANSWER_MAX_LENGTH,
@@ -344,6 +346,43 @@ export class MarketplaceQuestionService {
     );
 
     return this.getById(tenantId, id);
+  }
+
+  /** Cevap bekleyen ürün soruları — sidebar badge */
+  async getStats(tenantId: string, source: MarketplaceQuestionSource = 'TRENDYOL'): Promise<MarketplaceQuestionStats> {
+    const waitingAnswer = await prisma.marketplaceQuestion.count({
+      where: {
+        tenantId,
+        source,
+        type:   'PRODUCT_QUESTION',
+        status: 'WAITING_ANSWER',
+      },
+    });
+
+    return { waitingAnswer };
+  }
+
+  /** Aktif Trendyol entegrasyonu olan tüm tenant'lar için soru sync (cron) */
+  async syncAllTenants(): Promise<void> {
+    const integrations = await prisma.trendyolIntegration.findMany({
+      where:  { isActive: true },
+      select: { tenantId: true },
+    });
+
+    logger.info({ message: `[Question Sync Cron] ${integrations.length} tenant taranıyor` });
+
+    for (const { tenantId } of integrations) {
+      try {
+        const result = await this.sync(tenantId, { source: 'TRENDYOL' });
+        logger.info({ message: '[Question Sync Cron] Tenant tamamlandı', tenantId, ...result });
+      } catch (err: any) {
+        logger.error({
+          message: '[Question Sync Cron] Tenant hatası',
+          tenantId,
+          err: err.message,
+        });
+      }
+    }
   }
 }
 
