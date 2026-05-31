@@ -181,44 +181,99 @@ export class TrendyolClient {
     };
   }
 
-  private formatTrendyolInvoiceError(error: any, label: string): Error {
+  private invoiceAlreadySentMessage(): string {
+    return 'Bu sipariş için fatura Trendyol\'a daha önce gönderilmiş. Trendyol panelinden mevcut fatura durumunu kontrol edin.';
+  }
+
+  private isInvoiceAlreadySent(detail: string): boolean {
+    return /fatura\s+(?:önceden|daha\s+önce)\s+gönderilmiş|invoice\s+already\s+sent|already\s+uploaded|already\s+exists|zaten\s+gönderilmiş/i.test(detail);
+  }
+
+  private formatTrendyolInvoiceError(
+    error: any,
+    label: string,
+  ): Error & { statusCode: number; trendyolStatus?: number } {
     const status = error.response?.status;
     const data   = error.response?.data;
     const detail = typeof data === 'string'
       ? data
-      : (data?.message ?? data?.errors?.[0]?.message ?? JSON.stringify(data ?? {}));
+      : (data?.message ?? data?.errors?.[0]?.message ?? data?.error?.message ?? JSON.stringify(data ?? {}));
+    const detailStr = String(detail ?? '');
 
-    if (status === 409) {
-      return new Error(
-        'Bu paket için fatura zaten gönderilmiş. Trendyol panelinden kontrol edin.',
-      );
+    if (status === 409 || this.isInvoiceAlreadySent(detailStr)) {
+      return Object.assign(new Error(this.invoiceAlreadySentMessage()), {
+        statusCode:     409,
+        trendyolStatus: status,
+      });
     }
+
     if (status === 404) {
-      return new Error(
-        'Trendyol paketi bulunamadı. Siparişi yeniden senkronize edip tekrar deneyin.',
+      return Object.assign(
+        new Error('Trendyol paketi bulunamadı. Siparişi yeniden senkronize edip tekrar deneyin.'),
+        { statusCode: 404, trendyolStatus: status },
       );
     }
+
     if (status === 403) {
-      return new Error('Bu paket belirtilen satıcıya ait değil.');
+      return Object.assign(
+        new Error('Bu paket belirtilen satıcıya ait değil.'),
+        { statusCode: 403, trendyolStatus: status },
+      );
     }
-    if (status === 400 && typeof detail === 'string') {
-      if (/micro|mikro|invoice information is required/i.test(detail)) {
-        return new Error(
-          'Mikro ihracat siparişi için fatura no ve fatura tarihi zorunludur.',
+
+    if (status === 401) {
+      return Object.assign(
+        new Error('Trendyol API yetkilendirme hatası. Entegrasyon bilgilerinizi kontrol edin.'),
+        { statusCode: 401, trendyolStatus: status },
+      );
+    }
+
+    if (status === 400) {
+      if (/micro|mikro|invoice information is required/i.test(detailStr)) {
+        return Object.assign(
+          new Error('Mikro ihracat siparişi için fatura no ve fatura tarihi zorunludur.'),
+          { statusCode: 422, trendyolStatus: status },
         );
       }
-      if (/file size|10\s*mb/i.test(detail)) {
-        return new Error('Fatura dosyası en fazla 10 MB olabilir.');
+      if (/file size|10\s*mb/i.test(detailStr)) {
+        return Object.assign(
+          new Error('Fatura dosyası en fazla 10 MB olabilir.'),
+          { statusCode: 422, trendyolStatus: status },
+        );
       }
-      if (/file type|not supported|pdf/i.test(detail)) {
-        return new Error('Geçersiz dosya formatı. Sadece PDF yükleyebilirsiniz.');
+      if (/file type|not supported|pdf/i.test(detailStr)) {
+        return Object.assign(
+          new Error('Geçersiz dosya formatı. Sadece PDF yükleyebilirsiniz.'),
+          { statusCode: 422, trendyolStatus: status },
+        );
       }
-      if (/file not sent|select the invoice file/i.test(detail)) {
-        return new Error('PDF fatura dosyası seçilmedi.');
+      if (/file not sent|select the invoice file/i.test(detailStr)) {
+        return Object.assign(
+          new Error('PDF fatura dosyası seçilmedi.'),
+          { statusCode: 422, trendyolStatus: status },
+        );
       }
+
+      const message = detailStr && detailStr !== '{}'
+        ? detailStr
+        : `Trendyol ${label} gönderilemedi. Lütfen sipariş bilgilerini kontrol edip tekrar deneyin.`;
+      return Object.assign(new Error(message), { statusCode: 422, trendyolStatus: status });
     }
 
-    return new Error(`Trendyol ${label} gönderilemedi (${status ?? 'NET'}): ${detail || error.message}`);
+    if (status && status >= 400 && status < 500) {
+      const message = detailStr && detailStr !== '{}'
+        ? detailStr
+        : `Trendyol ${label} gönderilemedi (${status}): ${error.message}`;
+      return Object.assign(new Error(message), { statusCode: 422, trendyolStatus: status });
+    }
+
+    const message = detailStr && detailStr !== '{}'
+      ? `Trendyol ${label} gönderilemedi: ${detailStr}`
+      : `Trendyol ${label} gönderilemedi (${status ?? 'NET'}): ${error.message}`;
+    return Object.assign(new Error(message), {
+      statusCode:     status && status >= 500 ? 502 : 502,
+      trendyolStatus: status,
+    });
   }
 
   // CATEGORIES — official Trendyol Integration Gateway (apigw)
@@ -489,12 +544,6 @@ export class TrendyolClient {
         timeout: 30_000,
       });
     } catch (error: any) {
-      if (error.response?.status === 409) {
-        throw new Error(
-          'Bu paket için fatura zaten gönderilmiş veya link başka bir siparişte kullanılıyor. '
-          + 'Trendyol panelinden kontrol edin.',
-        );
-      }
       throw this.formatTrendyolInvoiceError(error, 'fatura linki');
     }
   }
