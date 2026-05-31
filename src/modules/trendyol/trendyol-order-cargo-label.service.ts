@@ -41,26 +41,6 @@ async function loadCargoLabelClient(tenantId: string, orderId: string) {
 
   const cargoCtx = extractCargoLabelOrderContext(order.rawPayload, order.status);
 
-  if (!cargoCtx.isLikelySupported) {
-    throw Object.assign(
-      new Error(
-        'Bu sipariş için Trendyol common label desteklenmiyor. '
-        + `Kargo firması (${cargoCtx.cargoProviderName ?? 'bilinmiyor'}) TEX/Aras Trendyol öder modeline uygun olmayabilir.`,
-      ),
-      { statusCode: 422 },
-    );
-  }
-
-  if (!cargoCtx.isLabelReadyStatus) {
-    throw Object.assign(
-      new Error(
-        'Kargo etiketi için sipariş durumu PICKING veya INVOICED olmalıdır. '
-        + `Mevcut durum: ${order.status}. Trendyol panelinde paketi hazırlanıyor/faturalandı aşamasına alın.`,
-      ),
-      { statusCode: 422 },
-    );
-  }
-
   const integration = await prisma.trendyolIntegration.findFirst({
     where: { tenantId, isActive: true },
   });

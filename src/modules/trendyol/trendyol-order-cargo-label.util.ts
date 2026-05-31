@@ -37,24 +37,9 @@ export function extractCargoTrackingNumber(
   return null;
 }
 
-const COMMON_LABEL_CARRIER_PATTERNS = [
-  /tex/i,
-  /trendyol express/i,
-  /aras/i,
-];
-
-const LABEL_READY_STATUSES = new Set([
-  'PICKING',
-  'INVOICED',
-  'SHIPPED',
-  'DELIVERED',
-]);
-
 export interface CargoLabelOrderContext {
   cargoProviderName: string | null;
   orderStatus:       string;
-  isLikelySupported: boolean;
-  isLabelReadyStatus: boolean;
 }
 
 export function extractCargoLabelOrderContext(
@@ -79,17 +64,9 @@ export function extractCargoLabelOrderContext(
     .trim()
     .toUpperCase();
 
-  const isLikelySupported = cargoProviderName
-    ? COMMON_LABEL_CARRIER_PATTERNS.some(p => p.test(cargoProviderName))
-    : true;
-
-  const isLabelReadyStatus = LABEL_READY_STATUSES.has(statusNorm);
-
   return {
     cargoProviderName,
     orderStatus: statusNorm || String(orderStatus ?? ''),
-    isLikelySupported,
-    isLabelReadyStatus,
   };
 }
 
