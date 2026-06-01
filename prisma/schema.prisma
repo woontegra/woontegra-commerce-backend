@@ -94,6 +94,7 @@ model Tenant {
   shippingSetting        TenantShippingSetting?
   marketplaceQuestions   MarketplaceQuestion[]
   supportTickets         SupportTicket[]
+  supportTicketMessages  SupportTicketMessage[]
 
   @@map("tenants")
 }
@@ -164,6 +165,7 @@ model User {
   userPermissions     UserPermission[]
   legalAcceptances    LegalAcceptance[]
   supportTicketsCreated SupportTicket[] @relation("SupportTicketsCreated")
+  supportMessagesSent   SupportTicketMessage[] @relation("SupportMessagesSent")
 
   @@unique([email, tenantId])
   @@map("users")
@@ -2317,9 +2319,36 @@ model SupportTicket {
 
   tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdBy User?  @relation("SupportTicketsCreated", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  messages  SupportTicketMessage[]
 
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, priority])
   @@map("support_tickets")
+}
+
+enum SupportMessageSenderType {
+  USER
+  SUPPORT
+}
+
+model SupportTicketMessage {
+  id           String                   @id @default(uuid())
+  ticketId     Int
+  tenantId     String
+  senderType   SupportMessageSenderType @default(USER)
+  senderUserId String?
+  message      String                   @db.Text
+  isInternal   Boolean                  @default(false)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tenant Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sender User?           @relation("SupportMessagesSent", fields: [senderUserId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([tenantId])
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_messages")
 }

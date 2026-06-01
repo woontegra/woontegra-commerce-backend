@@ -34,6 +34,12 @@ import {
   patchSubscriptionByTenant,
   setSubscriptionStatus,
 } from './admin.controller';
+import {
+  addAdminSupportTicketMessage,
+  getAdminSupportTicketById,
+  getAdminSupportTickets,
+  patchAdminSupportTicketStatus,
+} from './admin-support.controller';
 
 const router = Router();
 
@@ -87,5 +93,11 @@ router.post('/user/unban', unbanUser);
 
 // ── Audit logs ────────────────────────────────────────────────────────────────
 router.get('/audit-logs', getAuditLogs);
+
+// ── Support tickets (platform admin) ──────────────────────────────────────────
+router.get('/support/tickets', getAdminSupportTickets);
+router.get('/support/tickets/:id', getAdminSupportTicketById);
+router.post('/support/tickets/:id/messages', addAdminSupportTicketMessage);
+router.patch('/support/tickets/:id/status', patchAdminSupportTicketStatus);
 
 export default router;
