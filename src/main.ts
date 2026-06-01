@@ -74,6 +74,7 @@ import { cronSync as xmlSourcesCronSync } from './modules/xml-sources/xml-source
 import pricingRuleRoutes       from './modules/pricing/pricing-rule.routes';
 import pricingSettingsRoutes   from './modules/pricing/pricing-settings.routes';
 import storePublicRoutes       from './modules/store-public/store-public.routes';
+import storefrontBuilderRoutes from './modules/storefront-builder/storefront-builder.routes';
 import paymentSettingsRoutes   from './modules/payments/payment-settings.routes';
 import shippingSettingsRoutes  from './modules/shipping/shipping-settings.routes';
 import superAdminRoutes        from './modules/superadmin/superadmin.routes';
@@ -204,6 +205,7 @@ app.use('/api/v1',             publicApiRouter);  // Public REST API (API token 
 app.use('/api/support', supportRoutes);
 app.use('/api/seo', seoRoutes);
 app.use('/api/store', storePublicRoutes);
+app.use('/api/storefront-builder', storefrontBuilderRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 
 // Protected routes with authentication, tenant isolation + lifecycle guard

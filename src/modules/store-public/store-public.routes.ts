@@ -15,6 +15,7 @@ import * as shipCtrl from './store-shipping.controller';
 import * as authCtrl from './store-customer-auth.controller';
 import * as favCtrl from './store-favorites.controller';
 import * as returnCtrl from './store-return-request.controller';
+import { getPublicHomeLayout } from '../storefront-builder/storefront-builder.controller';
 import { requireStoreCustomer, optionalStoreCustomer } from './store-customer-auth.middleware';
 
 const router = Router();
@@ -44,6 +45,7 @@ router.get('/account/returns/:id', requireStoreCustomer, returnCtrl.getMyReturn)
 router.post('/account/orders/:orderNumber/return-request', requireStoreCustomer, returnCtrl.createReturnRequest);
 
 router.get('/products', ctrl.listProducts);
+router.get('/home-layout', getPublicHomeLayout);
 router.get('/products/:slug', ctrl.getProductBySlug);
 router.get('/categories', ctrl.listCategories);
 router.get('/payments/methods', ctrl.listStorePaymentMethods);
