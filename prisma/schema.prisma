@@ -96,6 +96,7 @@ model Tenant {
   supportTickets         SupportTicket[]
   supportTicketMessages  SupportTicketMessage[]
   storefrontPages        StorefrontPage[]
+  mediaAssets            MediaAsset[]
 
   @@map("tenants")
 }
@@ -2372,4 +2373,31 @@ model StorefrontPage {
   @@index([tenantId])
   @@index([pageType])
   @@map("storefront_pages")
+}
+
+enum MediaAssetType {
+  IMAGE
+}
+
+model MediaAsset {
+  id           String         @id @default(uuid())
+  tenantId     String
+  url          String
+  secureUrl    String?
+  publicId     String?
+  fileName     String
+  originalName String
+  mimeType     String
+  size         Int
+  width        Int?
+  height       Int?
+  type         MediaAssetType @default(IMAGE)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@map("media_assets")
 }

@@ -75,6 +75,7 @@ import pricingRuleRoutes       from './modules/pricing/pricing-rule.routes';
 import pricingSettingsRoutes   from './modules/pricing/pricing-settings.routes';
 import storePublicRoutes       from './modules/store-public/store-public.routes';
 import storefrontBuilderRoutes from './modules/storefront-builder/storefront-builder.routes';
+import mediaRoutes             from './modules/media/media.routes';
 import paymentSettingsRoutes   from './modules/payments/payment-settings.routes';
 import shippingSettingsRoutes  from './modules/shipping/shipping-settings.routes';
 import superAdminRoutes        from './modules/superadmin/superadmin.routes';
@@ -206,6 +207,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/seo', seoRoutes);
 app.use('/api/store', storePublicRoutes);
 app.use('/api/storefront-builder', storefrontBuilderRoutes);
+app.use('/api/media', mediaRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 
 // Protected routes with authentication, tenant isolation + lifecycle guard
