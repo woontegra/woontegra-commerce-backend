@@ -93,6 +93,7 @@ model Tenant {
   paymentSettings        TenantPaymentSetting[]
   shippingSetting        TenantShippingSetting?
   marketplaceQuestions   MarketplaceQuestion[]
+  supportTickets         SupportTicket[]
 
   @@map("tenants")
 }
@@ -162,6 +163,7 @@ model User {
   payments            Payment[]
   userPermissions     UserPermission[]
   legalAcceptances    LegalAcceptance[]
+  supportTicketsCreated SupportTicket[] @relation("SupportTicketsCreated")
 
   @@unique([email, tenantId])
   @@map("users")
@@ -2286,4 +2288,38 @@ model MarketplaceQuestion {
   @@index([productId])
   @@index([orderId])
   @@map("marketplace_questions")
+}
+
+enum SupportTicketStatus {
+  OPEN
+  WAITING_REPLY
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+model SupportTicket {
+  id              Int                   @id @default(autoincrement())
+  tenantId        String
+  subject         String
+  message         String                @db.Text
+  status          SupportTicketStatus   @default(OPEN)
+  priority        SupportTicketPriority @default(NORMAL)
+  category        String                @default("GENERAL")
+  createdByUserId String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("SupportTicketsCreated", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, priority])
+  @@map("support_tickets")
 }
