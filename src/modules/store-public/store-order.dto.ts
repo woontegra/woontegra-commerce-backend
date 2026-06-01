@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const paymentProviderEnum = z.enum([
   'PAYTR',
+  'IYZICO',
   'BANK_TRANSFER',
   'CASH_ON_DELIVERY',
 ]);

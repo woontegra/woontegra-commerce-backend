@@ -11,7 +11,7 @@ export const PAYMENT_PROVIDER_TYPES = [
 ] as const satisfies readonly PaymentProviderType[];
 
 /** Vitrinde listelenebilir (canlı entegrasyonu olan) sağlayıcılar */
-export const STOREFRONT_ONLINE_PROVIDERS: PaymentProviderType[] = ['PAYTR'];
+export const STOREFRONT_ONLINE_PROVIDERS: PaymentProviderType[] = ['PAYTR', 'IYZICO'];
 
 export const STOREFRONT_MANUAL_PROVIDERS: PaymentProviderType[] = [
   'BANK_TRANSFER',
@@ -64,6 +64,13 @@ export type PublicPaymentMethod =
   | {
       provider:    'PAYTR';
       displayName: string;
+      isActive:    true;
+      isTestMode:  boolean;
+    }
+  | {
+      provider:    'IYZICO';
+      displayName: string;
+      description: string;
       isActive:    true;
       isTestMode:  boolean;
     }

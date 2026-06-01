@@ -1,10 +1,12 @@
 import { PaymentProviderType } from '@prisma/client';
+import { isIyzicoCredentialsComplete } from '../store-public/iyzico/store-iyzico.config';
 import {
   DEFAULT_DISPLAY_NAMES,
   STOREFRONT_MANUAL_PROVIDERS,
   STOREFRONT_ONLINE_PROVIDERS,
   type BankTransferPublicConfig,
   type CashOnDeliveryPublicConfig,
+  type IyzicoCredentials,
   type PaytrCredentials,
   type PublicPaymentMethod,
 } from './payment-provider.types';
@@ -37,6 +39,23 @@ export class StorePaymentProviderService {
         methods.push({
           provider:    'PAYTR',
           displayName: row.displayName ?? DEFAULT_DISPLAY_NAMES.PAYTR,
+          isActive:    true,
+          isTestMode:  row.isTestMode,
+        });
+      }
+
+      if (provider === 'IYZICO') {
+        const row = await tenantPaymentSettingsService.getActiveRow(tenantId, 'IYZICO');
+        if (!row) continue;
+        const creds = await tenantPaymentSettingsService.getDecryptedCredentials<IyzicoCredentials>(
+          tenantId,
+          'IYZICO',
+        );
+        if (!isIyzicoCredentialsComplete(creds)) continue;
+        methods.push({
+          provider:    'IYZICO',
+          displayName: row.displayName ?? DEFAULT_DISPLAY_NAMES.IYZICO,
+          description: 'Kredi/banka kartı ile güvenli ödeme',
           isActive:    true,
           isTestMode:  row.isTestMode,
         });
@@ -81,7 +100,7 @@ export class StorePaymentProviderService {
   }
 
   isStorefrontProvider(provider: string): provider is PaymentProviderType {
-    return ['PAYTR', 'BANK_TRANSFER', 'CASH_ON_DELIVERY'].includes(provider);
+    return ['PAYTR', 'IYZICO', 'BANK_TRANSFER', 'CASH_ON_DELIVERY'].includes(provider);
   }
 }
 
