@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../../common/middleware/auth.middleware';
+import { normalizeMediaFolder } from './media.constants';
 import { mediaService, MediaError } from './media.service';
 import { mediaUploader } from './media.upload';
 
@@ -17,7 +18,10 @@ export async function listMedia(req: AuthRequest, res: Response): Promise<void> 
     const tenantId = req.user!.tenantId!;
     const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : 200;
     const limit = Number.isFinite(limitRaw) ? limitRaw : 200;
-    const data = await mediaService.list(tenantId, limit);
+    const folder = typeof req.query.folder === 'string' ? req.query.folder : undefined;
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const sort = typeof req.query.sort === 'string' ? req.query.sort : undefined;
+    const data = await mediaService.list(tenantId, { limit, folder, search, sort });
     res.json({ success: true, ...data });
   } catch (e: unknown) {
     handleError(res, e, 'Medya dosyaları yüklenemedi.');
@@ -44,7 +48,14 @@ export function uploadMedia(req: AuthRequest, res: Response): void {
 
     try {
       const tenantId = req.user!.tenantId!;
-      const asset = await mediaService.createFromUpload(tenantId, req.file);
+      const folderRaw =
+        typeof req.body?.folder === 'string'
+          ? req.body.folder
+          : typeof req.query.folder === 'string'
+            ? req.query.folder
+            : undefined;
+      const folder = normalizeMediaFolder(folderRaw);
+      const asset = await mediaService.createFromUpload(tenantId, req.file, folder);
       res.status(201).json({
         success: true,
         url: asset.url,

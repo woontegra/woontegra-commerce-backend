@@ -2392,6 +2392,7 @@ model MediaAsset {
   width        Int?
   height       Int?
   type         MediaAssetType @default(IMAGE)
+  folder       String         @default("general")
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -2399,5 +2400,6 @@ model MediaAsset {
 
   @@index([tenantId])
   @@index([tenantId, type])
+  @@index([tenantId, folder])
   @@map("media_assets")
 }

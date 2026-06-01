@@ -1,6 +1,13 @@
 import fs from 'fs';
 import sharp from 'sharp';
 import prisma from '../../config/database';
+import {
+  DEFAULT_MEDIA_FOLDER,
+  normalizeMediaFolder,
+  normalizeMediaSort,
+  type MediaFolderSlug,
+  type MediaSortField,
+} from './media.constants';
 import { mediaLocalPath, mediaPublicUrl } from './media.upload';
 
 export class MediaError extends Error {
@@ -26,8 +33,16 @@ export type MediaAssetDto = {
   width: number | null;
   height: number | null;
   type: string;
+  folder: string;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type MediaListOptions = {
+  limit?: number;
+  folder?: string | null;
+  search?: string;
+  sort?: string;
 };
 
 function serializeAsset(asset: {
@@ -43,6 +58,7 @@ function serializeAsset(asset: {
   width: number | null;
   height: number | null;
   type: string;
+  folder: string;
   createdAt: Date;
   updatedAt: Date;
 }): MediaAssetDto {
@@ -59,6 +75,7 @@ function serializeAsset(asset: {
     width: asset.width,
     height: asset.height,
     type: asset.type,
+    folder: asset.folder || DEFAULT_MEDIA_FOLDER,
     createdAt: asset.createdAt,
     updatedAt: asset.updatedAt,
   };
@@ -80,16 +97,54 @@ async function readImageDimensions(
   }
 }
 
+function buildOrderBy(sort: MediaSortField) {
+  switch (sort) {
+    case 'oldest':
+      return { createdAt: 'asc' as const };
+    case 'name':
+      return { originalName: 'asc' as const };
+    case 'size':
+      return { size: 'desc' as const };
+    default:
+      return { createdAt: 'desc' as const };
+  }
+}
+
 export const mediaService = {
-  async list(tenantId: string, limit = 200): Promise<{ assets: MediaAssetDto[]; total: number }> {
-    const take = Math.min(Math.max(limit, 1), 500);
+  async list(
+    tenantId: string,
+    options: MediaListOptions = {},
+  ): Promise<{ assets: MediaAssetDto[]; total: number }> {
+    const take = Math.min(Math.max(options.limit ?? 200, 1), 500);
+    const sort = normalizeMediaSort(options.sort);
+    const search = typeof options.search === 'string' ? options.search.trim() : '';
+    const folderRaw = typeof options.folder === 'string' ? options.folder.trim().toLowerCase() : '';
+
+    const where: {
+      tenantId: string;
+      type: 'IMAGE';
+      folder?: string;
+      OR?: Array<{ originalName: { contains: string; mode: 'insensitive' } } | { fileName: { contains: string; mode: 'insensitive' } }>;
+    } = { tenantId, type: 'IMAGE' };
+
+    if (folderRaw && folderRaw !== 'all') {
+      where.folder = normalizeMediaFolder(folderRaw);
+    }
+
+    if (search) {
+      where.OR = [
+        { originalName: { contains: search, mode: 'insensitive' } },
+        { fileName: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
     const [rows, total] = await Promise.all([
       prisma.mediaAsset.findMany({
-        where: { tenantId, type: 'IMAGE' },
-        orderBy: { createdAt: 'desc' },
+        where,
+        orderBy: buildOrderBy(sort),
         take,
       }),
-      prisma.mediaAsset.count({ where: { tenantId, type: 'IMAGE' } }),
+      prisma.mediaAsset.count({ where }),
     ]);
     return { assets: rows.map(serializeAsset), total };
   },
@@ -97,7 +152,9 @@ export const mediaService = {
   async createFromUpload(
     tenantId: string,
     file: Express.Multer.File,
+    folderInput?: string,
   ): Promise<MediaAssetDto> {
+    const folder: MediaFolderSlug = normalizeMediaFolder(folderInput);
     const filePath = mediaLocalPath(tenantId, file.filename);
     const { width, height } = await readImageDimensions(filePath, file.mimetype);
     const url = mediaPublicUrl(tenantId, file.filename);
@@ -114,6 +171,7 @@ export const mediaService = {
         width,
         height,
         type: 'IMAGE',
+        folder,
       },
     });
 
