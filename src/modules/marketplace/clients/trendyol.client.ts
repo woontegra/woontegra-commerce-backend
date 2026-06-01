@@ -186,7 +186,7 @@ export class TrendyolClient {
   }
 
   private isInvoiceAlreadySent(detail: string): boolean {
-    return /fatura\s+(?:önceden|daha\s+önce)\s+gönderilmiş|invoice\s+already\s+sent|already\s+uploaded|already\s+exists|zaten\s+gönderilmiş/i.test(detail);
+    return /fatura\s+(?:önceden|daha\s+önce|zaten)\s+gönderilmiş|ait\s+fatura\s+önceden\s+gönderilmiş|invoice\s+already\s+(?:sent|exists)|already\s+(?:uploaded|exists)/i.test(detail);
   }
 
   private formatTrendyolInvoiceError(
@@ -214,17 +214,10 @@ export class TrendyolClient {
       );
     }
 
-    if (status === 403) {
-      return Object.assign(
-        new Error('Bu paket belirtilen satıcıya ait değil.'),
-        { statusCode: 403, trendyolStatus: status },
-      );
-    }
-
-    if (status === 401) {
+    if (status === 401 || status === 403) {
       return Object.assign(
         new Error('Trendyol API yetkilendirme hatası. Entegrasyon bilgilerinizi kontrol edin.'),
-        { statusCode: 401, trendyolStatus: status },
+        { statusCode: 403, trendyolStatus: status },
       );
     }
 
