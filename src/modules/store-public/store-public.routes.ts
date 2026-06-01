@@ -58,6 +58,7 @@ router.post(
 );
 
 router.post('/payments/paytr/start', payCtrl.startPaytrPayment);
+router.post('/payments/iyzico/start', payCtrl.startIyzicoPayment);
 router.post(
   '/payments/paytr/callback',
   express.urlencoded({ extended: false }),

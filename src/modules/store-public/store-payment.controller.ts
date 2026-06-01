@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { resolveStoreTenant } from './store-tenant.util';
+import { startIyzicoPaymentSchema } from './iyzico/store-iyzico.dto';
+import { storeIyzicoService } from './iyzico/store-iyzico.service';
 import { startPaytrPaymentSchema } from './paytr/store-paytr.dto';
 import { storePaytrService } from './paytr/store-paytr.service';
 
@@ -39,6 +41,38 @@ export async function startPaytrPayment(req: Request, res: Response): Promise<vo
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Ödeme başlatılamadı.';
     const isClient = /bulunamadı|zaten|iptal|eksik|yalnızca|geçersiz|yapılandırma/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, error: msg });
+  }
+}
+
+export async function startIyzicoPayment(req: Request, res: Response): Promise<void> {
+  try {
+    const tenant = await resolveStoreTenant(req);
+    if (!tenant) {
+      res.status(404).json({ success: false, error: 'Mağaza bulunamadı.' });
+      return;
+    }
+
+    const parsed = startIyzicoPaymentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const msg = parsed.error.issues.map(i => i.message).join('; ');
+      res.status(400).json({ success: false, error: msg || 'Geçersiz istek.' });
+      return;
+    }
+
+    const result = await storeIyzicoService.startPayment(tenant, parsed.data, clientIp(req));
+
+    res.json({
+      success:             true,
+      provider:            result.provider,
+      token:               result.token,
+      checkoutFormContent: result.checkoutFormContent,
+      orderNumber:         result.orderNumber,
+      conversationId:      result.conversationId,
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Ödeme başlatılamadı.';
+    const isClient = /bulunamadı|zaten|iptal|eksik|yalnızca|geçersiz|uygun değil|iyzico|pasif|geçersiz/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, error: msg });
   }
 }
