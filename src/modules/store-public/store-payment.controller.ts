@@ -77,6 +77,22 @@ export async function startIyzicoPayment(req: Request, res: Response): Promise<v
   }
 }
 
+/** iyzico checkout callback — tarayıcı 302 redirect */
+export async function iyzicoCallback(req: Request, res: Response): Promise<void> {
+  try {
+    const raw = req.body?.token ?? req.query?.token;
+    const token = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : '';
+    const { redirectUrl } = await storeIyzicoService.handleCallback(String(token ?? ''));
+    res.redirect(302, redirectUrl);
+  } catch {
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const failBase = (
+      process.env.IYZICO_FAIL_URL?.trim() || `${frontendUrl}/store/odeme-basarisiz`
+    ).replace(/\/$/, '');
+    res.redirect(302, `${failBase}?reason=server_error`);
+  }
+}
+
 /** PayTR bildirim URL — gövde application/x-www-form-urlencoded */
 export async function paytrCallback(req: Request, res: Response): Promise<void> {
   try {

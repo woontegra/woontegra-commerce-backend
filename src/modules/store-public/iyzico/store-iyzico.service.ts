@@ -1,7 +1,18 @@
 import Iyzipay from 'iyzipay';
 import { OrderStatus, StorePaymentSessionStatus } from '@prisma/client';
 import prisma from '../../../config/database';
-import { buildStoreIyzicoClient, resolveIyzicoConfig } from './store-iyzico.config';
+import { OrderService } from '../../orders/order.service';
+import { storeEmailService } from '../store-email.service';
+import {
+  shouldSendPaytrPaymentFailedNotification,
+  shouldSendPaytrPaymentReceivedNotification,
+} from '../../email/templates/store-email.util';
+import {
+  buildIyzicoGenericFailRedirect,
+  buildIyzicoRedirectUrls,
+  buildStoreIyzicoClient,
+  resolveIyzicoConfig,
+} from './store-iyzico.config';
 import type { StartIyzicoPaymentInput } from './store-iyzico.dto';
 import type { StoreTenantPublic } from '../store-tenant.util';
 
@@ -83,7 +94,55 @@ export type StartIyzicoPaymentResult = {
   conversationId:      string;
 };
 
+export type IyzicoCallbackResult = {
+  redirectUrl: string;
+};
+
+function conversationIdFromPayload(payload: unknown): string {
+  if (payload && typeof payload === 'object' && payload !== null && 'conversationId' in payload) {
+    const v = (payload as { conversationId: unknown }).conversationId;
+    return typeof v === 'string' ? v : '';
+  }
+  return '';
+}
+
+function mergeProviderPayload(
+  existing: unknown,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const base =
+    existing && typeof existing === 'object' && existing !== null
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+  return { ...base, ...patch };
+}
+
+function summarizeRetrieveResult(result: Record<string, unknown>): Record<string, unknown> {
+  return {
+    status:        result.status ?? null,
+    paymentStatus: result.paymentStatus ?? null,
+    paymentId:     result.paymentId ?? null,
+    paidPrice:     result.paidPrice ?? null,
+    currency:      result.currency ?? null,
+    errorMessage:  result.errorMessage ?? null,
+  };
+}
+
+async function appendOrderNote(orderId: string, line: string): Promise<void> {
+  const o = await prisma.order.findUnique({
+    where:  { id: orderId },
+    select: { notes: true },
+  });
+  const next = [o?.notes?.trim(), line].filter(Boolean).join('\n\n');
+  await prisma.order.update({
+    where: { id: orderId },
+    data:  { notes: next || line },
+  });
+}
+
 export class StoreIyzicoService {
+  private readonly orderService = new OrderService();
+
   async startPayment(
     tenant: StoreTenantPublic,
     input: StartIyzicoPaymentInput,
@@ -241,6 +300,198 @@ export class StoreIyzicoService {
           conversationId,
         });
       });
+    });
+  }
+
+  /**
+   * iyzico checkout callback — checkoutFormRetrieve ile doğrulama + sipariş güncelleme.
+   */
+  async handleCallback(token: string): Promise<IyzicoCallbackResult> {
+    if (!token?.trim()) {
+      return { redirectUrl: buildIyzicoGenericFailRedirect('missing_token') };
+    }
+
+    const session = await prisma.storePaymentSession.findUnique({
+      where:   { merchantOid: token.trim() },
+      include: {
+        order: {
+          select: {
+            id: true,
+            status: true,
+            orderNumber: true,
+            totalAmount: true,
+            tenantId: true,
+            paymentReceivedEmailSentAt: true,
+            paymentFailedEmailSentAt: true,
+            tenant: { select: { slug: true } },
+          },
+        },
+      },
+    });
+
+    if (!session?.order || session.provider !== 'IYZICO') {
+      return { redirectUrl: buildIyzicoGenericFailRedirect('not_found') };
+    }
+
+    const order = session.order;
+    const { okUrl, failUrl } = buildIyzicoRedirectUrls(order.tenant.slug, order.orderNumber);
+
+    if (order.status === OrderStatus.PAID) {
+      if (session.status !== StorePaymentSessionStatus.SUCCESS) {
+        await prisma.storePaymentSession.update({
+          where: { id: session.id },
+          data:  { status: StorePaymentSessionStatus.SUCCESS },
+        });
+      }
+      return { redirectUrl: okUrl };
+    }
+
+    let config;
+    try {
+      config = await resolveIyzicoConfig(session.tenantId);
+    } catch {
+      return { redirectUrl: failUrl };
+    }
+
+    const conversationId = conversationIdFromPayload(session.providerPayload);
+    const iyzipay = buildStoreIyzicoClient(config);
+
+    return new Promise((resolve) => {
+      iyzipay.checkoutFormRetrieve.retrieve(
+        { locale: Iyzipay.LOCALE.TR, conversationId, token: token.trim() },
+        async (err: unknown, result: Record<string, unknown>) => {
+          const retrieveSummary = summarizeRetrieveResult(result ?? {});
+
+          const paymentOk =
+            !err &&
+            result?.status === 'success' &&
+            result?.paymentStatus === 'SUCCESS';
+
+          if (paymentOk) {
+            const paidKurus = toKurus(parseFloat(String(result.paidPrice ?? '0')));
+            const currency = String(result.currency ?? '').toUpperCase();
+
+            if (currency !== 'TRY' || paidKurus !== session.amountKurus) {
+              await prisma.storePaymentSession.update({
+                where: { id: session.id },
+                data: {
+                  status: StorePaymentSessionStatus.FAILED,
+                  providerPayload: mergeProviderPayload(session.providerPayload, {
+                    retrieveResponse: retrieveSummary,
+                    validationError: {
+                      expectedKurus: session.amountKurus,
+                      receivedKurus: paidKurus,
+                      currency,
+                    },
+                  }),
+                },
+              });
+              await appendOrderNote(
+                session.orderId,
+                `[iyzico] Tutar/para birimi uyuşmazlığı — beklenen ${session.amountKurus} kuruş TRY, gelen ${paidKurus} kuruş ${currency}`,
+              );
+              resolve({ redirectUrl: failUrl });
+              return;
+            }
+
+            if (order.status === OrderStatus.PENDING) {
+              await this.orderService.updateStatus(order.id, OrderStatus.PAID, session.tenantId, {
+                notifyCustomer: false,
+              });
+              await prisma.order.update({
+                where: { id: order.id },
+                data: {
+                  paymentProvider:   'IYZICO',
+                  paymentStatus:     'PAID',
+                  paymentApprovedAt: new Date(),
+                },
+              });
+              const paymentId = result.paymentId != null ? String(result.paymentId) : '—';
+              await appendOrderNote(
+                session.orderId,
+                `[iyzico] Ödeme başarılı — paymentId: ${paymentId}, tutar: ${session.amountKurus} kuruş`,
+              );
+              if (shouldSendPaytrPaymentReceivedNotification(order)) {
+                void storeEmailService.notifyOrderPaymentReceived(session.tenantId, order.id, {
+                  paymentProvider: 'IYZICO',
+                });
+              }
+            }
+
+            await prisma.storePaymentSession.update({
+              where: { id: session.id },
+              data: {
+                status: StorePaymentSessionStatus.SUCCESS,
+                providerPayload: mergeProviderPayload(session.providerPayload, {
+                  retrieveResponse: retrieveSummary,
+                }),
+              },
+            });
+            resolve({ redirectUrl: okUrl });
+            return;
+          }
+
+          // Başarısız ödeme — session zaten SUCCESS ise siparişi bozma
+          if (session.status === StorePaymentSessionStatus.SUCCESS) {
+            resolve({ redirectUrl: okUrl });
+            return;
+          }
+
+          const sendPaymentFailedEmail = shouldSendPaytrPaymentFailedNotification(
+            session.status,
+            order.status,
+            order,
+          );
+
+          if (session.status !== StorePaymentSessionStatus.FAILED) {
+            await prisma.storePaymentSession.update({
+              where: { id: session.id },
+              data: {
+                status: StorePaymentSessionStatus.FAILED,
+                providerPayload: mergeProviderPayload(session.providerPayload, {
+                  retrieveResponse: retrieveSummary,
+                  callbackError: err instanceof Error ? err.message : null,
+                }),
+              },
+            });
+          }
+
+          if (order.status === OrderStatus.PENDING) {
+            await this.orderService.updateStatus(order.id, OrderStatus.CANCELLED, session.tenantId, {
+              notifyCustomer: false,
+            });
+            await prisma.order.update({
+              where: { id: order.id },
+              data: {
+                paymentProvider: 'IYZICO',
+                paymentStatus:   'FAILED',
+                paymentFailedAt: new Date(),
+              },
+            });
+            if (sendPaymentFailedEmail) {
+              void storeEmailService.notifyOrderPaymentFailed(session.tenantId, order.id, {
+                paymentProvider: 'IYZICO',
+              });
+            }
+            const reason =
+              String(result?.errorMessage ?? '') ||
+              String(result?.paymentStatus ?? '') ||
+              (err instanceof Error ? err.message : '') ||
+              'bilinmiyor';
+            await appendOrderNote(
+              session.orderId,
+              `[iyzico] Ödeme başarısız — ${reason}. Stok iade edildi (sipariş CANCELLED).`,
+            );
+          } else if (order.status !== OrderStatus.CANCELLED) {
+            await appendOrderNote(
+              session.orderId,
+              `[iyzico] Ödeme başarısız bildirimi (sipariş durumu: ${order.status}).`,
+            );
+          }
+
+          resolve({ redirectUrl: failUrl });
+        },
+      );
     });
   }
 }

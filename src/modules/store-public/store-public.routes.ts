@@ -64,5 +64,10 @@ router.post(
   express.urlencoded({ extended: false }),
   payCtrl.paytrCallback,
 );
+router.post(
+  '/payments/iyzico/callback',
+  express.urlencoded({ extended: false }),
+  payCtrl.iyzicoCallback,
+);
 
 export default router;

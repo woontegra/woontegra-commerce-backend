@@ -66,3 +66,35 @@ export async function resolveIyzicoConfig(tenantId: string): Promise<IyzicoStore
     source:    'tenant',
   };
 }
+
+function storefrontFrontendBase(): string {
+  return (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+}
+
+/** PayTR vitrin success/fail URL yapısı ile aynı desen. */
+export function buildIyzicoRedirectUrls(
+  tenantSlug: string,
+  orderNumber: string,
+): { okUrl: string; failUrl: string } {
+  const frontendUrl = storefrontFrontendBase();
+  const okBase = (
+    process.env.IYZICO_SUCCESS_URL?.trim() || `${frontendUrl}/store/odeme-basarili`
+  ).replace(/\/$/, '');
+  const failBase = (
+    process.env.IYZICO_FAIL_URL?.trim() || `${frontendUrl}/store/odeme-basarisiz`
+  ).replace(/\/$/, '');
+  const q = `tenant=${encodeURIComponent(tenantSlug)}`;
+  const path = encodeURIComponent(orderNumber);
+  return {
+    okUrl:   `${okBase}/${path}?${q}`,
+    failUrl: `${failBase}/${path}?${q}`,
+  };
+}
+
+export function buildIyzicoGenericFailRedirect(reason: string): string {
+  const frontendUrl = storefrontFrontendBase();
+  const failBase = (
+    process.env.IYZICO_FAIL_URL?.trim() || `${frontendUrl}/store/odeme-basarisiz`
+  ).replace(/\/$/, '');
+  return `${failBase}?reason=${encodeURIComponent(reason)}`;
+}
