@@ -63,6 +63,23 @@ export class OrderController {
     }
   };
 
+  getHistory = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const id       = req.params.id;
+      const tenantId = req.user!.tenantId!;
+
+      const history = await this.orderService.getHistory(id, tenantId);
+      if (history === null) {
+        res.status(404).json({ error: 'Sipariş bulunamadı.' });
+        return;
+      }
+
+      res.status(200).json({ status: 'success', data: history });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message ?? 'Sipariş geçmişi alınamadı.' });
+    }
+  };
+
   create = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const tenantId = req.user!.tenantId!;
@@ -170,6 +187,13 @@ export class OrderController {
         return;
       }
 
+      const existing = await this.orderService.getById(id, tenantId);
+      if (!existing) {
+        res.status(404).json({ error: 'Sipariş bulunamadı.' });
+        return;
+      }
+      const previousStatus = String(existing.status);
+
       const order = await this.orderService.updateStatus(id, normalized, tenantId, {
         notifyCustomer: true,
       });
@@ -204,7 +228,7 @@ export class OrderController {
         category:  AuditCategory.ORDER,
         targetType: 'Order', targetId: id,
         targetName: order.orderNumber,
-        details:   { newStatus: normalized },
+        details:   { newStatus: normalized, previousStatus },
         req,
       }).catch(() => {});
 

@@ -161,6 +161,7 @@ export class AuditService {
     action?:     string;
     category?:   string;
     targetType?: string;
+    targetId?:   string;
     tenantId?:   string;
     userId?:     string;
     status?:     string;
@@ -185,6 +186,7 @@ export class AuditService {
     if (filters.action)     where.action     = filters.action;
     if (filters.category)   where.category   = filters.category;
     if (filters.targetType) where.targetType = filters.targetType;
+    if (filters.targetId)   where.targetId   = filters.targetId;
     if (filters.tenantId)   where.tenantId   = filters.tenantId;
     if (filters.userId)     where.userId     = filters.userId;
     if (filters.status)     where.status     = filters.status;
@@ -207,6 +209,24 @@ export class AuditService {
     ]);
 
     return { items, total, page, limit };
+  }
+
+  async getTargetHistory(
+    tenantId: string,
+    targetType: string,
+    targetId: string,
+    limit = 100,
+  ) {
+    return prisma.auditLog.findMany({
+      where: {
+        tenantId,
+        targetType,
+        targetId,
+        category: AuditCategory.ORDER,
+      },
+      orderBy: { createdAt: 'asc' },
+      take:    limit,
+    });
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

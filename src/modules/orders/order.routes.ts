@@ -9,6 +9,7 @@ const ctrl   = new OrderController();
 router.get('/',                    ctrl.getAll);
 router.get('/stats',               ctrl.getStats);
 router.get('/customer/:customerId', ctrl.getByCustomer);
+router.get('/:id/history',         ctrl.getHistory);
 router.get('/:id',                 ctrl.getById);
 router.post('/',                   enforceOrderLimit, ctrl.create);
 router.patch('/:id/shipping',      ctrl.updateShipping);

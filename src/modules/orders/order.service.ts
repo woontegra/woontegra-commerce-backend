@@ -26,6 +26,8 @@ import {
   unifiedSortKey,
 } from './order-unified.presenter';
 import type { OrderStatus } from '@prisma/client';
+import { auditService } from '../audit/audit.service';
+import { mapAuditLogsToOrderHistory } from './order-history.mapper';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -752,6 +754,19 @@ export class OrderService {
       include: ORDER_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  // ── History (audit-based) ───────────────────────────────────────────────
+
+  async getHistory(id: string, tenantId: string) {
+    const order = await prisma.order.findFirst({
+      where:  { id, tenantId },
+      select: { id: true },
+    });
+    if (!order) return null;
+
+    const logs = await auditService.getTargetHistory(tenantId, 'Order', id);
+    return mapAuditLogsToOrderHistory(logs);
   }
 
   // ── Stats ─────────────────────────────────────────────────────────────────
