@@ -216,6 +216,10 @@ model Customer {
   zipCode      String?
   passwordHash String?
   groupId      String?
+  kvkkConsent         Boolean   @default(false)
+  kvkkConsentAt       DateTime?
+  marketingConsent    Boolean   @default(false)
+  marketingConsentAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   tenantId     String

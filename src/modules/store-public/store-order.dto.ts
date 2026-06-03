@@ -50,6 +50,10 @@ export const createStoreOrderSchema = z.object({
   }),
   notes: z.string().max(2000).optional().default(''),
   paymentProvider: paymentProviderEnum.optional(),
+  consents: z.object({
+    kvkkConsent:      z.boolean(),
+    marketingConsent: z.boolean().default(false),
+  }).optional(),
 });
 
 /** Parse sonrası çıktı tipi (varsayılanlar uygulanmış, zorunlu alanlar dolu). */

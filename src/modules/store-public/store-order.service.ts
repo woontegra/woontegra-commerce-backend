@@ -6,6 +6,10 @@ import { storePaymentProviderService } from '../payments/store-payment-provider.
 import { storeShippingCalculationService } from '../shipping/store-shipping-calculation.service';
 import { storeEmailService } from './store-email.service';
 import type { CreateStoreOrderInput, StoreAddressBlock } from './store-order.dto';
+import {
+  consentFieldsForCreate,
+  consentFieldsForUpdate,
+} from '../customers/customer-consent.util';
 
 function num(v: unknown): number {
   if (v == null) return 0;
@@ -37,8 +41,13 @@ export class StoreOrderService {
     input: CreateStoreOrderInput,
     opts?: { authenticatedCustomerId?: string },
   ) {
-    const { items, customer, billingAddress, notes, paymentProvider } = input;
+    const { items, customer, billingAddress, notes, paymentProvider, consents } = input;
     const deliveryAddress: StoreAddressBlock = input.shippingAddress;
+    const isGuest = !opts?.authenticatedCustomerId;
+
+    if (isGuest && !consents?.kvkkConsent) {
+      throw new Error('KVKK aydınlatma metnini kabul etmelisiniz.');
+    }
 
     const orderItems: CreateOrderItemDto[] = [];
 
@@ -137,6 +146,9 @@ export class StoreOrderService {
           address:   shipAddrText,
           city:      deliveryAddress.city.trim(),
           zipCode:   deliveryAddress.postalCode?.trim() || null,
+          ...((consents && customerRow)
+            ? consentFieldsForUpdate(customerRow, consents)
+            : {}),
         },
       });
     } else {
@@ -156,6 +168,7 @@ export class StoreOrderService {
             zipCode:   deliveryAddress.postalCode?.trim() || null,
             country:   'TR',
             tenantId,
+            ...consentFieldsForCreate(consents!),
           },
         });
       } else {
@@ -168,6 +181,9 @@ export class StoreOrderService {
             address:   shipAddrText,
             city:      deliveryAddress.city.trim(),
             zipCode:   deliveryAddress.postalCode?.trim() || null,
+            ...((consents && customerRow)
+            ? consentFieldsForUpdate(customerRow, consents)
+            : {}),
           },
         });
       }

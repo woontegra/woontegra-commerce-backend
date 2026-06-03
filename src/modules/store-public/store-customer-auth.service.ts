@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { hashPassword, comparePassword } from '../../common/utils/password.util';
 import { generateStoreCustomerToken } from '../../common/utils/store-customer-jwt.util';
+import { consentFieldsForCreate } from '../customers/customer-consent.util';
 import type { StoreTenantPublic } from './store-tenant.util';
 
 function customerPublic(row: {
@@ -26,8 +27,14 @@ export class StoreCustomerAuthService {
     email:     string;
     phone:     string;
     password:  string;
+    kvkkConsent:      true;
+    marketingConsent: boolean;
   }) {
     const email = body.email.trim().toLowerCase();
+    const consentData = consentFieldsForCreate({
+      kvkkConsent:      true,
+      marketingConsent: body.marketingConsent ?? false,
+    });
 
     const existing = await prisma.customer.findUnique({
       where: { email_tenantId: { email, tenantId: tenant.id } },
@@ -47,6 +54,7 @@ export class StoreCustomerAuthService {
             lastName:     body.lastName.trim(),
             phone:        body.phone.trim() || null,
             passwordHash,
+            ...consentData,
           },
         })
       : await prisma.customer.create({
@@ -58,6 +66,7 @@ export class StoreCustomerAuthService {
             phone:        body.phone.trim() || null,
             passwordHash,
             country:      'TR',
+            ...consentData,
           },
         });
 

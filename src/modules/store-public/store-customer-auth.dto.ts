@@ -6,6 +6,10 @@ export const storeCustomerRegisterSchema = z.object({
   email:     z.string().email().max(200),
   phone:     z.string().min(7).max(30).optional().default(''),
   password:  z.string().min(6).max(128),
+  kvkkConsent: z.literal(true, {
+    errorMap: () => ({ message: 'KVKK aydınlatma metnini kabul etmelisiniz.' }),
+  }),
+  marketingConsent: z.boolean().optional().default(false),
 });
 
 export const storeCustomerLoginSchema = z.object({
