@@ -1,6 +1,7 @@
 import type { MarketplaceQuestionSource, Prisma } from '@prisma/client';
 import prisma from '../../config/database';
 import { logger } from '../../config/logger';
+import { eventBus } from '../notifications/events';
 import { toMarketplaceQuestionDTO } from './marketplace-question.mapper';
 import type {
   MarketplaceQuestionListQuery,
@@ -94,12 +95,30 @@ async function upsertQuestion(
     },
   });
 
+  let status            = record.status;
+  let externalStatus    = record.externalStatus;
+  let answerText        = record.answerText;
+  let answeredAt        = record.answeredAt;
+
+  // Sync sonrası cevaplanmış soruyu tekrar WAITING_ANSWER'a düşürme
+  if (
+    existing
+    && existing.answerText
+    && status === 'WAITING_ANSWER'
+    && (existing.status === 'ANSWERED' || existing.status === 'PENDING_APPROVAL')
+  ) {
+    status         = existing.status;
+    externalStatus = existing.externalStatus ?? externalStatus;
+    answerText     = answerText ?? existing.answerText;
+    answeredAt     = answeredAt ?? existing.answeredAt;
+  }
+
   const data = {
     type:              record.type,
-    externalStatus:    record.externalStatus,
-    status:            record.status,
+    externalStatus,
+    status,
     questionText:      record.questionText,
-    answerText:        record.answerText,
+    answerText,
     customerName:      record.customerName,
     customerId:        record.customerId,
     productName:       record.productName,
@@ -108,7 +127,7 @@ async function upsertQuestion(
     externalOrderId:   record.externalOrderId,
     productId,
     askedAt:           record.askedAt,
-    answeredAt:        record.answeredAt,
+    answeredAt,
     lastSyncedAt:      now,
     rawPayload:        record.rawPayload as Prisma.InputJsonValue,
   };
@@ -262,6 +281,14 @@ export class MarketplaceQuestionService {
       if (batch.items.length === 0) break;
     }
 
+    if (created > 0 && source === 'TRENDYOL') {
+      eventBus.emit('MARKETPLACE_QUESTIONS_SYNCED', {
+        tenantId,
+        source,
+        createdCount: created,
+      });
+    }
+
     return { source, fetched, created, updated, unchanged, errors };
   }
 
@@ -314,6 +341,18 @@ export class MarketplaceQuestionService {
       throw err;
     }
 
+    const now = new Date();
+    await prisma.marketplaceQuestion.update({
+      where: { id: row.id },
+      data: {
+        answerText:     text,
+        status:         'ANSWERED',
+        externalStatus: 'ANSWERED',
+        answeredAt:     now,
+        lastSyncedAt:   now,
+      },
+    });
+
     let refreshed: ExternalQuestionRecord | null = null;
     try {
       refreshed = await provider.getQuestionDetail(tenantId, row.externalQuestionId);
@@ -321,20 +360,8 @@ export class MarketplaceQuestionService {
       refreshed = null;
     }
 
-    const now = new Date();
-    if (refreshed) {
+    if (refreshed && refreshed.status !== 'WAITING_ANSWER') {
       await upsertQuestion(tenantId, row.source, refreshed);
-    } else {
-      await prisma.marketplaceQuestion.update({
-        where: { id: row.id },
-        data: {
-          answerText:     text,
-          status:         'PENDING_APPROVAL',
-          externalStatus: 'WAITING_FOR_APPROVE',
-          answeredAt:     now,
-          lastSyncedAt:   now,
-        },
-      });
     }
 
     await writeIntegrationLog(

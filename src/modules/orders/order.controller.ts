@@ -219,6 +219,63 @@ export class OrderController {
     }
   };
 
+  confirmPayment = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const id       = req.params.id;
+      const tenantId = req.user!.tenantId!;
+
+      const existing = await this.orderService.getById(id, tenantId);
+      if (!existing) {
+        res.status(404).json({ error: 'Sipariş bulunamadı.' });
+        return;
+      }
+
+      const oldStatus        = String(existing.status);
+      const oldPaymentStatus = existing.paymentStatus ?? null;
+
+      const order = await this.orderService.confirmPayment(id, tenantId);
+      const newStatus = String(order.status);
+
+      if (newStatus !== oldStatus) {
+        eventBus.emit('ORDER_STATUS_CHANGED', {
+          tenantId,
+          orderId:       id,
+          orderNumber:   order.orderNumber,
+          newStatus,
+          customerEmail: (order as any).customer?.email ?? '',
+          customerName:  (order as any).customer
+            ? `${(order as any).customer.firstName} ${(order as any).customer.lastName}`.trim()
+            : '',
+        });
+      }
+
+      auditService.log({
+        userId:    req.user!.id,
+        userEmail: req.user!.email,
+        userRole:  req.user!.role,
+        tenantId,
+        action:    AuditAction.ORDER_UPDATED,
+        category:  AuditCategory.ORDER,
+        targetType: 'Order',
+        targetId:   id,
+        targetName: order.orderNumber,
+        details: {
+          paymentConfirmed:    true,
+          previousPaymentStatus: oldPaymentStatus,
+          paymentStatus:       order.paymentStatus,
+          previousOrderStatus: oldStatus,
+          orderStatus:         newStatus,
+        },
+        req,
+      }).catch(() => {});
+
+      res.status(200).json({ status: 'success', data: toAdminOrderJson(order as never) });
+    } catch (err: any) {
+      const statusCode = err.statusCode ?? (err.message?.includes('bulunamadı') ? 404 : 500);
+      res.status(statusCode).json({ error: err.message ?? 'Ödeme onaylanamadı.' });
+    }
+  };
+
   delete = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const id       = req.params.id;

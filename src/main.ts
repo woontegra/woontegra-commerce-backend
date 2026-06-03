@@ -96,11 +96,11 @@ logger.info({
   redisConfigured: isRedisConfigured(),
 });
 
-if (config.nodeEnv === 'production' && !process.env.MARKETPLACE_ENCRYPTION_KEY?.trim()) {
+if (config.nodeEnv === 'production' && !config.marketplaceEncryptionKey) {
   logger.warn({
     message:
-      'MARKETPLACE_ENCRYPTION_KEY tanımlı değil — pazaryeri kimlik bilgisi şifreleme devre dışı. ' +
-      'Trendyol / marketplace entegrasyonu için Railway ortam değişkenlerine ekleyin.',
+      'MARKETPLACE_ENCRYPTION_KEY tanımlı değil — production ortamında Trendyol API bilgileri kaydedilemez. ' +
+      'Railway ortam değişkenlerine en az 16 karakterlik bir secret ekleyin (önerilen: openssl rand -hex 32).',
   });
 }
 
@@ -136,6 +136,9 @@ app.use(cors({
   origin: (origin, callback) => {
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:4173',
+      'http://127.0.0.1:4173',
       'http://localhost:3000',
       'https://woontegra.com',
       'https://www.woontegra.com',

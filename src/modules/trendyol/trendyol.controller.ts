@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { MarketplaceCredentialSaveBlockedError } from '../../common/crypto/marketplace-credential.crypto';
 import { TrendyolService, TRENDYOL_CARGO_COMPANIES, type ValidationReport } from './trendyol.service';
 import { batchStore } from './trendyol.queue';
 import prisma from '../../config/database';
@@ -55,6 +56,9 @@ export const saveIntegration = async (req: Request, res: Response) => {
     });
     res.json({ data, message: 'Trendyol API bilgileri kaydedildi.' });
   } catch (err: any) {
+    if (err instanceof MarketplaceCredentialSaveBlockedError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
     res.status(500).json({ error: err.message });
   }
 };

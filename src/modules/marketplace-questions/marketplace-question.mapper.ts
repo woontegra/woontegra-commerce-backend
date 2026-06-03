@@ -85,10 +85,16 @@ export function mapTrendyolQuestionPayload(raw: unknown): ExternalQuestionRecord
 
   const productMainId = item.productMainId ?? item.productId;
 
+  let status = mapTrendyolQuestionStatus(externalStatus);
+  // Trendyol bazen cevaplı soruda status göndermez veya gecikmeli WAITING_FOR_ANSWER döner
+  if (answerText && status === 'WAITING_ANSWER') {
+    status = 'ANSWERED';
+  }
+
   return {
     externalQuestionId: String(id),
-    externalStatus,
-    status:             mapTrendyolQuestionStatus(externalStatus),
+    externalStatus:     externalStatus ?? (answerText ? 'ANSWERED' : null),
+    status,
     type:               'PRODUCT_QUESTION',
     questionText,
     answerText:         answerText || null,

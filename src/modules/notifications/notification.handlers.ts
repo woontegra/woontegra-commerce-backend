@@ -234,4 +234,26 @@ eventBus.on('USER_BANNED', async (p) => {
   });
 });
 
+// ─── MARKETPLACE_QUESTIONS_SYNCED ─────────────────────────────────────────────
+
+eventBus.on('MARKETPLACE_QUESTIONS_SYNCED', async (p) => {
+  logger.info({
+    message: '[Event] MARKETPLACE_QUESTIONS_SYNCED',
+    tenantId: p.tenantId,
+    createdCount: p.createdCount,
+  });
+
+  await inAppService.create({
+    tenantId: p.tenantId,
+    type:     NotificationType.SYSTEM_MESSAGE,
+    title:    'Yeni Trendyol müşteri sorusu',
+    message:  'Trendyol\'dan yeni müşteri sorusu geldi. Yanıt bekleyen soruları kontrol edin.',
+    data:     {
+      link:         '/dashboard/marketplace-questions',
+      source:       p.source,
+      createdCount: p.createdCount,
+    },
+  });
+});
+
 logger.info({ message: '[Notifications] All event handlers registered' });

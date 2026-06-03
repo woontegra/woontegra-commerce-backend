@@ -62,3 +62,15 @@ export function adminListPaymentStatusLabel(
   if (!status?.trim()) return 'Belirsiz';
   return ADMIN_LIST_PAYMENT_STATUS_LABELS[status] ?? ORDER_PAYMENT_STATUS_LABELS[status] ?? status;
 }
+
+export function isBankTransferProvider(provider: string | null | undefined): boolean {
+  return String(provider ?? '').trim().toUpperCase() === 'BANK_TRANSFER';
+}
+
+/** Havale/EFT — panelden manuel onay bekleyen ödeme durumları */
+export function isBankTransferPaymentAwaitingConfirm(
+  paymentStatus: string | null | undefined,
+): boolean {
+  const s = String(paymentStatus ?? '').trim().toUpperCase();
+  return s === 'PENDING' || s === 'WAITING_BANK_TRANSFER';
+}

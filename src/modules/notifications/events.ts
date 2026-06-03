@@ -97,6 +97,12 @@ export interface TenantSuspendedPayload {
   adminEmail: string;
 }
 
+export interface MarketplaceQuestionsSyncedPayload {
+  tenantId:     string;
+  source:       string;
+  createdCount: number;
+}
+
 // ─── Event Map ────────────────────────────────────────────────────────────────
 
 export interface AppEventMap {
@@ -111,6 +117,7 @@ export interface AppEventMap {
   STOCK_LOW:                StockLowPayload;
   USER_BANNED:              UserBannedPayload;
   TENANT_SUSPENDED:         TenantSuspendedPayload;
+  MARKETPLACE_QUESTIONS_SYNCED: MarketplaceQuestionsSyncedPayload;
 }
 
 export type AppEventName = keyof AppEventMap;

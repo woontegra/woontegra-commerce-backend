@@ -9,6 +9,8 @@ import {
 } from '../email/templates/store-email.util';
 import {
   initialOrderPaymentStatus,
+  isBankTransferPaymentAwaitingConfirm,
+  isBankTransferProvider,
   resolveOrderPaymentProvider,
 } from './order-payment.util';
 import { normalizeShippingInput, type OrderShippingInput } from './order-shipping.util';
@@ -665,6 +667,61 @@ export class OrderService {
     }
 
     return this.getById(id, tenantId);
+  }
+
+  // ── Confirm bank transfer payment (admin) ─────────────────────────────────
+
+  async confirmPayment(id: string, tenantId: string) {
+    const existing = await prisma.order.findFirst({
+      where: { id, tenantId },
+      include: ORDER_INCLUDE,
+    });
+
+    if (!existing) {
+      throw new Error('Sipariş bulunamadı veya bu tenant\'a ait değil.');
+    }
+
+    const paymentProvider = resolveOrderPaymentProvider(existing);
+    if (!isBankTransferProvider(paymentProvider)) {
+      throw Object.assign(
+        new Error('Yalnızca havale/EFT siparişlerinde ödeme onaylanabilir.'),
+        { statusCode: 422 },
+      );
+    }
+
+    if (String(existing.status) === CANCELLED_STATUS) {
+      throw Object.assign(
+        new Error('İptal edilmiş siparişte ödeme onaylanamaz.'),
+        { statusCode: 422 },
+      );
+    }
+
+    if (!isBankTransferPaymentAwaitingConfirm(existing.paymentStatus)) {
+      throw Object.assign(
+        new Error('Bu siparişin ödemesi zaten onaylanmış veya onaylanamaz durumda.'),
+        { statusCode: 422 },
+      );
+    }
+
+    const oldStatus = String(existing.status);
+    const newStatus = oldStatus === 'PENDING' ? 'PROCESSING' : oldStatus;
+    const now = new Date();
+
+    const order = await prisma.order.update({
+      where: { id },
+      data: {
+        paymentStatus:     'PAID',
+        paymentApprovedAt: now,
+        ...(newStatus !== oldStatus ? { status: newStatus as OrderStatus } : {}),
+      },
+      include: ORDER_INCLUDE,
+    });
+
+    if (!existing.bankTransferApprovedEmailSentAt) {
+      void storeEmailService.notifyBankTransferPaymentApproved(tenantId, id, { newStatus: 'PAID' });
+    }
+
+    return order;
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────

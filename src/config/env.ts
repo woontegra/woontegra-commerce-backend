@@ -8,6 +8,8 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL!,
   jwtSecret: process.env.JWT_SECRET!,
   jwtExpiresIn: '7d',
+  /** Trendyol / marketplace API credential encryption (AES-256-CBC) */
+  marketplaceEncryptionKey: process.env.MARKETPLACE_ENCRYPTION_KEY?.trim() || '',
 };
 
 if (!config.databaseUrl) {

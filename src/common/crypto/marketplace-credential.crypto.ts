@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { logger } from '../../config/logger';
 
 const ENC_PREFIX = 'enc:v1:';
 const ALGORITHM = 'aes-256-cbc';
@@ -10,7 +11,39 @@ const SCRYPT_SALT = 'salt';
 /** Legacy format: 32-char hex IV + ciphertext (marketplace.service.ts) */
 const LEGACY_IV_CIPHER = /^[0-9a-f]{32}:[0-9a-f]+$/i;
 
+export const MARKETPLACE_CREDENTIAL_SAVE_BLOCKED_MESSAGE =
+  'Trendyol API bilgileri güvenli şekilde saklanamıyor. Lütfen sistem yöneticisi ile iletişime geçin.';
+
+export class MarketplaceCredentialSaveBlockedError extends Error {
+  readonly statusCode = 503;
+
+  constructor(message = MARKETPLACE_CREDENTIAL_SAVE_BLOCKED_MESSAGE) {
+    super(message);
+    this.name = 'MarketplaceCredentialSaveBlockedError';
+  }
+}
+
 let cachedKey: Buffer | null = null;
+
+export function isMarketplaceEncryptionKeyConfigured(): boolean {
+  const raw = process.env.MARKETPLACE_ENCRYPTION_KEY?.trim();
+  return Boolean(raw && raw.length >= 16);
+}
+
+/** Production'da kimlik bilgisi kaydı için zorunlu; development'ta yalnızca uyarı. */
+export function assertMarketplaceCredentialSaveAllowed(): void {
+  if (isMarketplaceEncryptionKeyConfigured()) return;
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) {
+    throw new MarketplaceCredentialSaveBlockedError();
+  }
+
+  logger.warn({
+    message:
+      'MARKETPLACE_ENCRYPTION_KEY tanımlı değil — development ortamında Trendyol kimlik bilgileri şifrelenmeden kaydedilecek.',
+  });
+}
 
 export function assertMarketplaceEncryptionKeyConfigured(): void {
   getEncryptionKey();
@@ -40,6 +73,19 @@ export function isCredentialEncrypted(value: string | null | undefined): boolean
   if (!value) return false;
   if (value.startsWith(ENC_PREFIX)) return true;
   return LEGACY_IV_CIPHER.test(value);
+}
+
+/** Trendyol kimlik bilgisi kaydı — production'da key zorunlu, development'ta key yoksa düz metin. */
+export function encryptCredentialForSave(plaintext: string): string {
+  if (plaintext == null || plaintext === '') return plaintext;
+
+  assertMarketplaceCredentialSaveAllowed();
+
+  if (!isMarketplaceEncryptionKeyConfigured()) {
+    return plaintext;
+  }
+
+  return encryptCredential(plaintext);
 }
 
 export function encryptCredential(plaintext: string): string {

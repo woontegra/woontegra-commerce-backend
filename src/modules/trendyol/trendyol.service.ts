@@ -14,8 +14,9 @@ import {
   toPriceStrategy,
 } from '../pricing/pricing-settings.service';
 import {
+  assertMarketplaceCredentialSaveAllowed,
   decryptTrendyolCredentials,
-  encryptCredential,
+  encryptCredentialForSave,
 } from '../../common/crypto/marketplace-credential.crypto';
 import {
   applyTrendyolPriceStrategy,
@@ -407,6 +408,15 @@ export class TrendyolService {
       where: { tenantId },
     });
 
+    const credentialFieldsChanged = [data.apiKey, data.apiSecret, data.token].some(
+      v => v && v !== '***',
+    );
+    const isNewIntegration = !existing;
+
+    if (isNewIntegration || credentialFieldsChanged) {
+      assertMarketplaceCredentialSaveAllowed();
+    }
+
     const patch: Record<string, unknown> = {
       supplierId: data.supplierId,
       isActive:   true,
@@ -416,13 +426,13 @@ export class TrendyolService {
     };
 
     if (data.apiKey && data.apiKey !== '***') {
-      patch.apiKey = encryptCredential(data.apiKey);
+      patch.apiKey = encryptCredentialForSave(data.apiKey);
     }
     if (data.apiSecret && data.apiSecret !== '***') {
-      patch.apiSecret = encryptCredential(data.apiSecret);
+      patch.apiSecret = encryptCredentialForSave(data.apiSecret);
     }
     if (data.token && data.token !== '***') {
-      patch.token = encryptCredential(data.token);
+      patch.token = encryptCredentialForSave(data.token);
     }
 
     if (existing) {
@@ -440,9 +450,9 @@ export class TrendyolService {
       data: {
         tenantId,
         supplierId:     data.supplierId,
-        apiKey:         encryptCredential(data.apiKey),
-        apiSecret:      encryptCredential(data.apiSecret),
-        ...(data.token && data.token !== '***' ? { token: encryptCredential(data.token) } : {}),
+        apiKey:         encryptCredentialForSave(data.apiKey),
+        apiSecret:      encryptCredentialForSave(data.apiSecret),
+        ...(data.token && data.token !== '***' ? { token: encryptCredentialForSave(data.token) } : {}),
         ...(data.integrationCode ? { integrationCode: data.integrationCode } : {}),
         isActive: true,
       },
