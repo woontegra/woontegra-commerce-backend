@@ -59,13 +59,20 @@ export class SettingsService {
     });
   }
 
-  /** Set logo URL after file upload */
+  /** Set logo URL after file upload — settings + tenant (vitrin tenant.logoUrl okur). */
   async setLogoUrl(tenantId: string, url: string) {
-    return prisma.settings.upsert({
-      where:  { tenantId },
-      create: { logoUrl: url, tenant: { connect: { id: tenantId } } },
-      update: { logoUrl: url },
-    });
+    const [settings] = await prisma.$transaction([
+      prisma.settings.upsert({
+        where:  { tenantId },
+        create: { logoUrl: url, tenant: { connect: { id: tenantId } } },
+        update: { logoUrl: url },
+      }),
+      prisma.tenant.update({
+        where: { id: tenantId },
+        data:  { logoUrl: url },
+      }),
+    ]);
+    return settings;
   }
 
   /** Set favicon URL after file upload */

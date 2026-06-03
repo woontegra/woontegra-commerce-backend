@@ -38,7 +38,8 @@ export const faviconUploader = makeUploader('favicons');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const BASE_URL = () => process.env.BACKEND_URL || 'http://localhost:3001';
+const BASE_URL = () =>
+  process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
 
 function publicUrl(subdir: string, filename: string) {
   return `${BASE_URL()}/uploads/${subdir}/${filename}`;
@@ -94,7 +95,7 @@ export const getSettings = async (req: AuthRequest, res: Response): Promise<void
         contactEmail:     typeof contact.email === 'string' ? contact.email : '',
         contactPhone:     typeof contact.phone === 'string' ? contact.phone : '',
         contactAddress:   typeof contact.address === 'string' ? contact.address : '',
-        tenantLogoUrl:    tenant?.logoUrl ?? null,
+        tenantLogoUrl:    tenant?.logoUrl ?? settings.logoUrl ?? null,
       },
     });
   } catch (err: any) {

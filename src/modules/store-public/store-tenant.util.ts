@@ -3,11 +3,12 @@ import prisma from '../../config/database';
 import { resolveTenantFromHost } from '../../services/tenantDomainResolve.service';
 
 export type StoreTenantPublic = {
-  id:      string;
-  name:    string;
-  slug:    string;
-  theme:   string;
-  logoUrl: string | null;
+  id:         string;
+  name:       string;
+  slug:       string;
+  theme:      string;
+  logoUrl:    string | null;
+  faviconUrl: string | null;
 };
 
 function tenantThemeFromRow(row: unknown): string {
@@ -22,6 +23,29 @@ function pickHost(req: Request): string {
   return raw;
 }
 
+async function enrichStoreTenantPublic(t: {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  theme?: unknown;
+}): Promise<StoreTenantPublic> {
+  const settings = await prisma.settings.findUnique({
+    where:  { tenantId: t.id },
+    select: { logoUrl: true, faviconUrl: true },
+  });
+  const tenantLogo = t.logoUrl?.trim() || null;
+  const settingsLogo = settings?.logoUrl?.trim() || null;
+  return {
+    id:         t.id,
+    name:       t.name,
+    slug:       t.slug,
+    theme:      tenantThemeFromRow(t),
+    logoUrl:    tenantLogo ?? settingsLogo,
+    faviconUrl: settings?.faviconUrl?.trim() || null,
+  };
+}
+
 /**
  * Kiracı çözümü: ?tenant=slug (öncelik), yoksa host / X-Store-Frontend-Host.
  */
@@ -33,15 +57,7 @@ export async function resolveStoreTenant(req: Request): Promise<StoreTenantPubli
     const t = await prisma.tenant.findFirst({
       where: { slug: slugFromQuery, isActive: true },
     });
-    return t
-      ? {
-          id:      t.id,
-          name:    t.name,
-          slug:    t.slug,
-          theme:   tenantThemeFromRow(t),
-          logoUrl: t.logoUrl,
-        }
-      : null;
+    return t ? enrichStoreTenantPublic(t) : null;
   }
 
   const host    = pickHost(req);
@@ -51,24 +67,17 @@ export async function resolveStoreTenant(req: Request): Promise<StoreTenantPubli
   const t = await prisma.tenant.findFirst({
     where: { id: resolved.id, isActive: true },
   });
-  return t
-    ? {
-        id:      t.id,
-        name:    t.name,
-        slug:    t.slug,
-        theme:   tenantThemeFromRow(t),
-        logoUrl: t.logoUrl,
-      }
-    : null;
+  return t ? enrichStoreTenantPublic(t) : null;
 }
 
 export function tenantJson(t: StoreTenantPublic) {
   const name = t.name?.trim() || 'Mağaza';
   return {
-    id:      t.id,
+    id:         t.id,
     name,
-    slug:    t.slug,
-    theme:   t.theme,
-    logoUrl: t.logoUrl,
+    slug:       t.slug,
+    theme:      t.theme,
+    logoUrl:    t.logoUrl,
+    faviconUrl: t.faviconUrl,
   };
 }
