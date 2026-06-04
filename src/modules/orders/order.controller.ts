@@ -33,6 +33,7 @@ export class OrderController {
         paymentProvider: parsed.data.paymentProvider,
         paymentStatus:   parsed.data.paymentStatus,
         source:          parsed.data.source,
+        operationFilter: parsed.data.operationFilter,
       });
 
       res.status(200).json({

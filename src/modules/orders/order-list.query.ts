@@ -22,6 +22,8 @@ const PAYMENT_STATUSES = [
 
 const ORDER_SOURCES = ['all', 'storefront', 'trendyol'] as const;
 
+export const OPERATION_FILTERS = ['invoice_missing', 'tracking_missing'] as const;
+
 export const orderListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
@@ -30,6 +32,7 @@ export const orderListQuerySchema = z.object({
   paymentProvider: z.enum(PAYMENT_PROVIDER_TYPES).optional(),
   paymentStatus: z.enum(PAYMENT_STATUSES).optional(),
   source: z.enum(ORDER_SOURCES).optional(),
+  operationFilter: z.enum(OPERATION_FILTERS).optional(),
 });
 
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;

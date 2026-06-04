@@ -1,5 +1,27 @@
 import type { Prisma } from '@prisma/client';
 import type { OrderListQuery } from './order-list.query';
+import { OPERATION_FILTERS } from './order-list.query';
+
+type OperationFilter = (typeof OPERATION_FILTERS)[number];
+
+function buildOperationFilterClause(
+  operationFilter: OperationFilter,
+): Prisma.OrderWhereInput {
+  if (operationFilter === 'invoice_missing') {
+    return {
+      AND: [
+        { OR: [{ invoiceNumber: null }, { invoiceNumber: '' }] },
+        { OR: [{ invoiceUrl: null }, { invoiceUrl: '' }] },
+      ],
+    };
+  }
+  return {
+    AND: [
+      { OR: [{ shippingTrackingNumber: null }, { shippingTrackingNumber: '' }] },
+      { OR: [{ shippingTrackingUrl: null }, { shippingTrackingUrl: '' }] },
+    ],
+  };
+}
 
 export function buildOrderListWhere(
   tenantId: string,
@@ -33,6 +55,10 @@ export function buildOrderListWhere(
         },
       },
     ];
+  }
+
+  if (query.operationFilter) {
+    return { AND: [where, buildOperationFilterClause(query.operationFilter)] };
   }
 
   return where;

@@ -66,6 +66,7 @@ export interface GetAllOrdersQuery {
   paymentProvider?:  PaymentProviderType;
   paymentStatus?:    OrderPaymentStatus;
   source?:           'all' | 'storefront' | 'trendyol';
+  operationFilter?:  OrderListQuery['operationFilter'];
 }
 
 /** Sipariş durumu güncellemesi — müşteri e-postası isteğe bağlı (admin vs ödeme callback). */
@@ -244,6 +245,7 @@ export class OrderService {
       ...(query.search ? { search: query.search } : {}),
       ...(query.paymentProvider ? { paymentProvider: query.paymentProvider } : {}),
       ...(query.paymentStatus ? { paymentStatus: query.paymentStatus } : {}),
+      ...(query.operationFilter ? { operationFilter: query.operationFilter } : {}),
     };
 
     const where = buildOrderListWhere(tenantId, listQuery);
@@ -273,6 +275,20 @@ export class OrderService {
     const page   = Number(query.page ?? 1);
     const limit  = Number(query.limit ?? 20);
 
+    if (query.operationFilter) {
+      if (source === 'trendyol') {
+        return { orders: [], total: 0, page, totalPages: 1 };
+      }
+      const result   = await this.getAll(tenantId, query);
+      const listJson = toAdminOrderListJson(result.orders as never);
+      return {
+        orders:     listJson.map(mapStorefrontListItemToUnified),
+        total:      result.total,
+        page:       result.page,
+        totalPages: result.totalPages,
+      };
+    }
+
     if (source === 'storefront') {
       const result   = await this.getAll(tenantId, query);
       const listJson = toAdminOrderListJson(result.orders as never);
@@ -299,6 +315,7 @@ export class OrderService {
       ...(query.search ? { search: query.search } : {}),
       ...(query.paymentProvider ? { paymentProvider: query.paymentProvider } : {}),
       ...(query.paymentStatus ? { paymentStatus: query.paymentStatus } : {}),
+      ...(query.operationFilter ? { operationFilter: query.operationFilter } : {}),
     };
   }
 
