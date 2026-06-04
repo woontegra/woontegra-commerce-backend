@@ -3,6 +3,14 @@ import type { StoreCustomerAuthRequest } from './store-customer-auth.middleware'
 import { ProductService } from '../products/product.service';
 import { StockError } from '../orders/order.service';
 import { resolveStoreTenant, tenantJson } from './store-tenant.util';
+import {
+  categoryMetaDescription,
+  productMetaDescription,
+  readCustomField,
+  storefrontCategoryPath,
+  storefrontProductPath,
+  storefrontUsesCustomDomain,
+} from './store-public-seo.util';
 import { createStoreOrderSchema } from './store-order.dto';
 import { storeOrderService } from './store-order.service';
 import { storeOrderStatusService } from './store-order-status.service';
@@ -114,6 +122,14 @@ export async function getProductBySlug(req: Request, res: Response): Promise<voi
 
     const price         = num(p.pricing?.salePrice ?? p.price);
     const discountPrice = p.pricing?.discountPrice != null ? num(p.pricing.discountPrice) : null;
+    const images        = collectImageUrls(p);
+    const useCustom     = storefrontUsesCustomDomain(tenant.customDomain, tenant.domainVerified);
+    const metaTitle     = readCustomField(p.customFields, 'metaTitle') ?? p.name;
+    const metaDescription = productMetaDescription(
+      p.name,
+      p.description,
+      readCustomField(p.customFields, 'metaDescription'),
+    );
 
     res.json({
       status: 'success',
@@ -126,10 +142,14 @@ export async function getProductBySlug(req: Request, res: Response): Promise<voi
         price,
         discountPrice,
         stock:       Number((p as { stock?: { quantity?: unknown } }).stock?.quantity ?? 0),
-        images:      collectImageUrls(p),
+        images,
         category:    p.category
           ? { id: p.category.id, name: p.category.name, slug: p.category.slug }
           : null,
+        metaTitle,
+        metaDescription,
+        canonicalPath: storefrontProductPath(slug, tenant.slug, useCustom),
+        ogImage:       images[0] ?? null,
       },
     });
   } catch (e: any) {
@@ -151,22 +171,42 @@ export async function listCategories(req: Request, res: Response): Promise<void>
         isActive: true,
       },
       select: {
-        id:          true,
-        name:        true,
-        slug:        true,
-        description: true,
-        imageUrl:    true,
-        parentId:    true,
-        order:       true,
-        level:       true,
+        id:              true,
+        name:            true,
+        slug:            true,
+        description:     true,
+        imageUrl:        true,
+        parentId:        true,
+        order:           true,
+        level:           true,
+        metaTitle:       true,
+        metaDescription: true,
       },
       orderBy: [{ level: 'asc' }, { order: 'asc' }, { name: 'asc' }],
     });
 
+    const useCustom = storefrontUsesCustomDomain(tenant.customDomain, tenant.domainVerified);
+
     res.json({
       status: 'success',
       tenant: tenantJson(tenant),
-      data:   rows,
+      data:   rows.map(row => ({
+        id:          row.id,
+        name:        row.name,
+        slug:        row.slug,
+        description: row.description,
+        imageUrl:    row.imageUrl,
+        parentId:    row.parentId,
+        order:       row.order,
+        level:       row.level,
+        metaTitle:       row.metaTitle?.trim() || row.name,
+        metaDescription: categoryMetaDescription(
+          row.name,
+          row.description,
+          row.metaDescription?.trim() || null,
+        ),
+        canonicalPath: storefrontCategoryPath(row.slug, tenant.slug, useCustom),
+      })),
     });
   } catch (e: any) {
     res.status(500).json({ status: 'error', error: e?.message ?? 'Kategoriler alınamadı.' });

@@ -3,12 +3,15 @@ import prisma from '../../config/database';
 import { resolveTenantFromHost } from '../../services/tenantDomainResolve.service';
 
 export type StoreTenantPublic = {
-  id:         string;
-  name:       string;
-  slug:       string;
-  theme:      string;
-  logoUrl:    string | null;
-  faviconUrl: string | null;
+  id:               string;
+  name:             string;
+  slug:             string;
+  theme:            string;
+  logoUrl:          string | null;
+  faviconUrl:       string | null;
+  siteDescription:  string | null;
+  customDomain:     string | null;
+  domainVerified:   boolean;
 };
 
 function tenantThemeFromRow(row: unknown): string {
@@ -29,6 +32,9 @@ async function enrichStoreTenantPublic(t: {
   slug: string;
   logoUrl: string | null;
   theme?: unknown;
+  description?: string | null;
+  customDomain?: string | null;
+  domainVerified?: boolean;
 }): Promise<StoreTenantPublic> {
   const settings = await prisma.settings.findUnique({
     where:  { tenantId: t.id },
@@ -36,13 +42,17 @@ async function enrichStoreTenantPublic(t: {
   });
   const tenantLogo = t.logoUrl?.trim() || null;
   const settingsLogo = settings?.logoUrl?.trim() || null;
+  const siteDescription = t.description?.trim() || null;
   return {
-    id:         t.id,
-    name:       t.name,
-    slug:       t.slug,
-    theme:      tenantThemeFromRow(t),
-    logoUrl:    tenantLogo ?? settingsLogo,
-    faviconUrl: settings?.faviconUrl?.trim() || null,
+    id:              t.id,
+    name:            t.name,
+    slug:            t.slug,
+    theme:           tenantThemeFromRow(t),
+    logoUrl:         tenantLogo ?? settingsLogo,
+    faviconUrl:      settings?.faviconUrl?.trim() || null,
+    siteDescription,
+    customDomain:    t.customDomain?.trim() || null,
+    domainVerified:  Boolean(t.domainVerified),
   };
 }
 
@@ -73,11 +83,14 @@ export async function resolveStoreTenant(req: Request): Promise<StoreTenantPubli
 export function tenantJson(t: StoreTenantPublic) {
   const name = t.name?.trim() || 'Mağaza';
   return {
-    id:         t.id,
+    id:              t.id,
     name,
-    slug:       t.slug,
-    theme:      t.theme,
-    logoUrl:    t.logoUrl,
-    faviconUrl: t.faviconUrl,
+    slug:            t.slug,
+    theme:           t.theme,
+    logoUrl:         t.logoUrl,
+    faviconUrl:      t.faviconUrl,
+    siteDescription: t.siteDescription,
+    customDomain:    t.customDomain,
+    domainVerified:  t.domainVerified,
   };
 }
