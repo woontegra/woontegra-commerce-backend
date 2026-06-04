@@ -16,6 +16,8 @@ import * as authCtrl from './store-customer-auth.controller';
 import * as favCtrl from './store-favorites.controller';
 import * as returnCtrl from './store-return-request.controller';
 import * as blogCtrl from './store-public-blog.controller';
+import * as pageCtrl from './store-public-pages.controller';
+import { getStoreNavigationMenus } from '../navigation-menus/store-navigation.controller';
 import { getPublicHomeLayout } from '../storefront-builder/storefront-builder.controller';
 import { requireStoreCustomer, optionalStoreCustomer } from './store-customer-auth.middleware';
 
@@ -51,6 +53,8 @@ router.get('/products/:slug', ctrl.getProductBySlug);
 router.get('/categories', ctrl.listCategories);
 router.get('/blog', blogCtrl.listStoreBlogPosts);
 router.get('/blog/:slug', blogCtrl.getStoreBlogPostBySlug);
+router.get('/sayfa/:slug', pageCtrl.getStorePageBySlug);
+router.get('/navigation-menus', getStoreNavigationMenus);
 router.get('/payments/methods', ctrl.listStorePaymentMethods);
 router.post('/shipping/calculate', shipCtrl.calculateStoreShipping);
 router.post('/orders', optionalStoreCustomer, ctrl.createStoreOrder);

@@ -30,6 +30,8 @@ import planRoutes from './modules/plan/plan.routes';
 import supportRoutes from './modules/support/support.routes';
 import seoRoutes from './modules/seo/seo.routes';
 import blogRoutes from './modules/blog/blog.routes';
+import pagesRoutes from './modules/pages/pages.routes';
+import navigationMenuRoutes from './modules/navigation-menus/navigation-menu.routes';
 import { marketplaceRoutes } from './modules/marketplace/marketplace.routes';
 import marketplaceHubRoutes from './modules/marketplace/core/services/marketplace-hub.routes';
 import billingRoutes from './modules/billing/billing.routes';
@@ -210,6 +212,9 @@ app.use('/api/v1',             publicApiRouter);  // Public REST API (API token 
 app.use('/api/support', supportRoutes);
 app.use('/api/seo', seoRoutes);
 app.use('/api/blog', blogRoutes);
+app.use('/api/pages', pagesRoutes);
+app.use('/api/content-pages', pagesRoutes);
+app.use('/api/navigation-menus', navigationMenuRoutes);
 app.use('/api/store', storePublicRoutes);
 app.use('/api/storefront-builder', storefrontBuilderRoutes);
 app.use('/api/media', mediaRoutes);

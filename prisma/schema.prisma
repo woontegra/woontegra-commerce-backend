@@ -97,6 +97,7 @@ model Tenant {
   supportTicketMessages  SupportTicketMessage[]
   storefrontPages        StorefrontPage[]
   mediaAssets            MediaAsset[]
+  navigationMenus        TenantNavigationMenu[]
 
   @@map("tenants")
 }
@@ -798,17 +799,29 @@ model Settings {
 }
 
 model Page {
-  id          String   @id @default(uuid())
-  title       String
-  slug        String
-  sections    Json     @default("[]")
-  isPublished Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id              String    @id @default(uuid())
+  title           String
+  slug            String
+  content         String    @default("")
+  excerpt         String?
+  coverImageUrl   String?
+  status          String    @default("draft")
+  publishedAt     DateTime?
+  metaTitle       String?
+  metaDescription String?
+  showInHeader    Boolean   @default(false)
+  showInFooter    Boolean   @default(false)
+  sortOrder       Int       @default(0)
+  sections        Json      @default("[]")
+  isPublished     Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([slug, tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, sortOrder])
   @@map("pages")
 }
 
@@ -2394,6 +2407,47 @@ model StorefrontPage {
 
 enum MediaAssetType {
   IMAGE
+}
+
+enum NavigationMenuType {
+  HEADER
+  FOOTER
+}
+
+model TenantNavigationMenu {
+  id        String               @id @default(uuid())
+  tenantId  String
+  title     String               @default("Menü")
+  type      NavigationMenuType
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items     TenantNavigationMenuItem[]
+
+  @@unique([tenantId, type])
+  @@index([tenantId])
+  @@map("tenant_navigation_menus")
+}
+
+model TenantNavigationMenuItem {
+  id           String   @id @default(uuid())
+  menuId       String
+  tenantId     String
+  label        String
+  linkType     String   // page | category | blog | product | custom
+  targetId     String?
+  url          String?
+  parentId     String?
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  openInNewTab Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  menu         TenantNavigationMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@index([menuId, sortOrder])
+  @@index([tenantId])
+  @@map("tenant_navigation_menu_items")
 }
 
 model MediaAsset {

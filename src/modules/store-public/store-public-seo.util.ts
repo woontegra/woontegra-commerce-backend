@@ -101,6 +101,18 @@ export function storefrontBlogPostPath(
   );
 }
 
+export function storefrontContentPagePath(
+  pageSlug: string,
+  tenantSlug: string,
+  useCustomDomain: boolean,
+): string {
+  return appendTenantQuery(
+    `/store/sayfa/${encodeURIComponent(pageSlug)}`,
+    tenantSlug,
+    useCustomDomain,
+  );
+}
+
 /** Sitemap XML içinde güvenli &lt;loc&gt; değeri. */
 export function escapeXmlLoc(url: string): string {
   return url
