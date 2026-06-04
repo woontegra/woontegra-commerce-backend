@@ -7,6 +7,7 @@ import { auditService, AuditCategory, AuditAction } from '../audit/audit.service
 import { invoiceService } from '../../services/invoice.service';
 import { toAdminOrderJson } from './order-admin.presenter';
 import { parseOrderListQuery } from './order-list.query';
+import { orderInvoicePdfUploader, orderInvoicePublicUrl } from './order-invoice.upload';
 
 const VALID_STATUSES = ['PENDING', 'PROCESSING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 
@@ -133,6 +134,65 @@ export class OrderController {
       }
       res.status(500).json({ error: err.message ?? 'Sipariş oluşturulamadı.' });
     }
+  };
+
+  uploadInvoicePdf = (req: AuthRequest, res: Response): void => {
+    orderInvoicePdfUploader(req, res, async (err: unknown) => {
+      if (err) {
+        const msg =
+          err instanceof Error
+            ? err.message.includes('File too large')
+              ? 'Dosya boyutu en fazla 5 MB olabilir.'
+              : err.message
+            : 'Fatura PDF yüklenemedi.';
+        res.status(400).json({ error: msg });
+        return;
+      }
+
+      if (!req.file) {
+        res.status(400).json({ error: 'PDF dosyası seçilmedi.' });
+        return;
+      }
+
+      try {
+        const id       = req.params.id;
+        const tenantId = req.user!.tenantId!;
+
+        const existing = await this.orderService.getById(id, tenantId);
+        if (!existing) {
+          res.status(404).json({ error: 'Sipariş bulunamadı.' });
+          return;
+        }
+
+        const invoiceUrl = orderInvoicePublicUrl(tenantId, req.file.filename);
+        const order = await this.orderService.updateInvoice(id, tenantId, { invoiceUrl });
+
+        auditService.log({
+          userId:    req.user!.id,
+          userEmail: req.user!.email,
+          userRole:  req.user!.role,
+          tenantId,
+          action:    AuditAction.ORDER_UPDATED,
+          category:  AuditCategory.ORDER,
+          targetType: 'Order',
+          targetId:   id,
+          targetName: order.orderNumber,
+          details: {
+            invoicePdfUploaded: true,
+            invoiceNumber:      order.invoiceNumber ?? null,
+            hasInvoiceUrl:      true,
+            fileName:             req.file.originalname,
+          },
+          req,
+        }).catch(() => {});
+
+        res.status(200).json({ status: 'success', data: toAdminOrderJson(order as never) });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Fatura PDF yüklenemedi.';
+        const is404 = msg.includes('bulunamadı');
+        res.status(is404 ? 404 : 400).json({ error: msg });
+      }
+    });
   };
 
   updateInvoice = async (req: AuthRequest, res: Response): Promise<void> => {

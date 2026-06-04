@@ -91,6 +91,9 @@ type OrderRow = {
   shippingTrackingUrl?:    string | null;
   shippedAt?:              Date | null;
   shippingNotificationSentAt?: Date | null;
+  invoiceNumber?:     string | null;
+  invoiceUrl?:        string | null;
+  invoiceUploadedAt?: Date | null;
   createdAt:        Date;
   updatedAt:        Date;
   customer?: {
@@ -420,6 +423,12 @@ export function toAdminOrderListJson(orders: OrderRow[]) {
       paymentStatus:    full.paymentStatus,
       paymentApprovedAt: full.paymentApprovedAt,
       paymentFailedAt:   full.paymentFailedAt,
+      invoiceNumber:     full.invoiceNumber,
+      invoiceUrl:        full.invoiceUrl,
+      invoiceUploadedAt: full.invoiceUploadedAt,
+      shippingCarrier:        full.shippingCarrier,
+      shippingTrackingNumber: full.shippingTrackingNumber,
+      shippingTrackingUrl:    full.shippingTrackingUrl,
       totalAmount:      full.totalAmount,
       shippingPrice:    full.shippingPrice,
       discountAmount:   full.discountAmount,

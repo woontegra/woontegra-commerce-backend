@@ -13,6 +13,7 @@ router.get('/:id/history',         ctrl.getHistory);
 router.get('/:id',                 ctrl.getById);
 router.post('/',                   enforceOrderLimit, ctrl.create);
 router.patch('/:id/shipping',      ctrl.updateShipping);
+router.post('/:id/invoice/upload', ctrl.uploadInvoicePdf);
 router.patch('/:id/invoice',       ctrl.updateInvoice);
 router.patch('/:id/status',        ctrl.updateStatus);
 router.patch('/:id/confirm-payment', ctrl.confirmPayment);

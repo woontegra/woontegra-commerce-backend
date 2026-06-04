@@ -93,6 +93,27 @@ export function mapAuditLogsToOrderHistory(logs: AuditLog[]): OrderHistoryEntry[
       continue;
     }
 
+    if (action === AuditAction.ORDER_UPDATED && details.invoicePdfUploaded === true) {
+      const parts: string[] = ['Fatura PDF yüklendi'];
+      const invNo = str(details.invoiceNumber);
+      if (invNo) parts.push(`Fatura no: ${invNo}`);
+      const fileName = str(details.fileName);
+      if (fileName) parts.push(fileName);
+      entries.push({
+        id:                    log.id,
+        occurredAt:            log.createdAt.toISOString(),
+        actionType:            'ORDER_INVOICE_PDF_UPLOADED',
+        actionLabel:           'Fatura PDF yüklendi',
+        previousStatus:        trackedStatus,
+        newStatus:             trackedStatus,
+        previousPaymentStatus: null,
+        newPaymentStatus:      null,
+        actorEmail:            log.userEmail,
+        note:                  parts.join(' · '),
+      });
+      continue;
+    }
+
     if (action === AuditAction.ORDER_UPDATED && details.invoiceUpdated === true) {
       const parts: string[] = ['Fatura bilgileri güncellendi'];
       const invNo = str(details.invoiceNumber);
