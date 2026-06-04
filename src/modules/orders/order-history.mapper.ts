@@ -93,6 +93,26 @@ export function mapAuditLogsToOrderHistory(logs: AuditLog[]): OrderHistoryEntry[
       continue;
     }
 
+    if (action === AuditAction.ORDER_UPDATED && details.invoiceUpdated === true) {
+      const parts: string[] = ['Fatura bilgileri güncellendi'];
+      const invNo = str(details.invoiceNumber);
+      if (invNo) parts.push(`Fatura no: ${invNo}`);
+      if (details.hasInvoiceUrl === true) parts.push('Fatura linki kaydedildi');
+      entries.push({
+        id:                    log.id,
+        occurredAt:            log.createdAt.toISOString(),
+        actionType:            'ORDER_INVOICE_UPDATED',
+        actionLabel:           'Fatura bilgileri güncellendi',
+        previousStatus:        trackedStatus,
+        newStatus:             trackedStatus,
+        previousPaymentStatus: null,
+        newPaymentStatus:      null,
+        actorEmail:            log.userEmail,
+        note:                  parts.join(' · '),
+      });
+      continue;
+    }
+
     if (action === AuditAction.ORDER_UPDATED && details.paymentConfirmed === true) {
       const previousStatus = str(details.previousOrderStatus) ?? trackedStatus;
       const newStatus      = str(details.orderStatus) ?? trackedStatus;

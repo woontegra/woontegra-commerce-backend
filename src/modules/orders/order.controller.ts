@@ -135,6 +135,56 @@ export class OrderController {
     }
   };
 
+  updateInvoice = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const id       = req.params.id;
+      const tenantId = req.user!.tenantId!;
+      const { invoiceNumber, invoiceUrl } = req.body ?? {};
+
+      if (invoiceNumber === undefined && invoiceUrl === undefined) {
+        res.status(400).json({ error: 'En az bir alan gönderilmelidir: invoiceNumber veya invoiceUrl.' });
+        return;
+      }
+
+      const existing = await this.orderService.getById(id, tenantId);
+      if (!existing) {
+        res.status(404).json({ error: 'Sipariş bulunamadı.' });
+        return;
+      }
+
+      const order = await this.orderService.updateInvoice(id, tenantId, {
+        ...(invoiceNumber !== undefined ? { invoiceNumber } : {}),
+        ...(invoiceUrl !== undefined ? { invoiceUrl } : {}),
+      });
+
+      auditService.log({
+        userId:    req.user!.id,
+        userEmail: req.user!.email,
+        userRole:  req.user!.role,
+        tenantId,
+        action:    AuditAction.ORDER_UPDATED,
+        category:  AuditCategory.ORDER,
+        targetType: 'Order',
+        targetId:   id,
+        targetName: order.orderNumber,
+        details: {
+          invoiceUpdated: true,
+          invoiceNumber:  order.invoiceNumber ?? null,
+          hasInvoiceUrl:  Boolean(order.invoiceUrl),
+        },
+        req,
+      }).catch(() => {});
+
+      res.status(200).json({ status: 'success', data: toAdminOrderJson(order as never) });
+    } catch (err: any) {
+      const is404 = err.message?.includes('bulunamadı');
+      const is400 = err.message?.includes('http://') || err.message?.includes('https://');
+      res.status(is404 ? 404 : is400 ? 400 : 500).json({
+        error: err.message ?? 'Fatura bilgileri kaydedilemedi.',
+      });
+    }
+  };
+
   updateShipping = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const id       = req.params.id;

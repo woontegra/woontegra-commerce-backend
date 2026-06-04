@@ -14,6 +14,11 @@ import {
   resolveOrderPaymentProvider,
 } from './order-payment.util';
 import { normalizeShippingInput, type OrderShippingInput } from './order-shipping.util';
+import {
+  normalizeInvoiceNumber,
+  normalizeInvoiceUrl,
+  type OrderInvoiceInput,
+} from './order-invoice.util';
 import type { OrderPaymentStatus, PaymentProviderType } from '@prisma/client';
 import { storeEmailService } from '../store-public/store-email.service';
 import type { OrderListQuery } from './order-list.query';
@@ -667,6 +672,49 @@ export class OrderService {
       }
       return this.updateStatus(id, 'SHIPPED', tenantId, { notifyCustomer: true });
     }
+
+    return this.getById(id, tenantId);
+  }
+
+  // ── Store order invoice info (admin) ──────────────────────────────────────
+
+  async updateInvoice(id: string, tenantId: string, input: OrderInvoiceInput) {
+    const existing = await prisma.order.findFirst({
+      where: { id, tenantId },
+      select: {
+        id:                true,
+        invoiceUrl:        true,
+        invoiceUploadedAt: true,
+      },
+    });
+
+    if (!existing) {
+      throw new Error('Sipariş bulunamadı veya bu tenant\'a ait değil.');
+    }
+
+    const data: Prisma.OrderUpdateInput = {};
+
+    if (input.invoiceNumber !== undefined) {
+      data.invoiceNumber = normalizeInvoiceNumber(input.invoiceNumber);
+    }
+
+    if (input.invoiceUrl !== undefined) {
+      const invoiceUrl = normalizeInvoiceUrl(input.invoiceUrl);
+      data.invoiceUrl = invoiceUrl;
+      if (invoiceUrl) {
+        data.invoiceUploadedAt =
+          existing.invoiceUrl !== invoiceUrl || !existing.invoiceUploadedAt
+            ? new Date()
+            : existing.invoiceUploadedAt;
+      } else {
+        data.invoiceUploadedAt = null;
+      }
+    }
+
+    await prisma.order.update({
+      where: { id },
+      data,
+    });
 
     return this.getById(id, tenantId);
   }

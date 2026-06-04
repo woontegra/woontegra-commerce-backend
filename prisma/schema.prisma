@@ -594,6 +594,10 @@ model Order {
   shippedAt                       DateTime?
   shippingNotificationSentAt      DateTime?
   cashOnDeliveryEmailSentAt       DateTime?
+  /// Mağaza siparişi satıcı faturası (SaaS Invoice modelinden ayrı)
+  invoiceNumber     String?
+  invoiceUrl        String?
+  invoiceUploadedAt DateTime?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   tenantId         String
