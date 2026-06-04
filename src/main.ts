@@ -82,6 +82,7 @@ import storefrontBuilderRoutes from './modules/storefront-builder/storefront-bui
 import mediaRoutes             from './modules/media/media.routes';
 import paymentSettingsRoutes   from './modules/payments/payment-settings.routes';
 import shippingSettingsRoutes  from './modules/shipping/shipping-settings.routes';
+import emailTemplateRoutes     from './modules/email-templates/email-template.routes';
 import superAdminRoutes        from './modules/superadmin/superadmin.routes';
 import invoiceRoutes           from './modules/billing/invoice.routes';
 import stockSyncRoutes          from './modules/stock/stock-sync.routes';
@@ -229,6 +230,7 @@ app.use('/api/pricing-rules', authenticate, requireTenantAccess, tenantLifecycle
 app.use('/api/pricing-settings', authenticate, requireTenantAccess, tenantLifecycleGuard, pricingSettingsRoutes);
 app.use('/api/payment-settings', authenticate, requireTenantAccess, tenantLifecycleGuard, paymentSettingsRoutes);
 app.use('/api/shipping-settings', authenticate, requireTenantAccess, tenantLifecycleGuard, shippingSettingsRoutes);
+app.use('/api/email-templates', authenticate, requireTenantAccess, tenantLifecycleGuard, emailTemplateRoutes);
 // Harici cron — JWT gerekmez; XML_CRON_SECRET + X-Xml-Cron-Secret
 app.post('/api/xml-sources/cron/sync', express.json(), asyncHandler(xmlSourcesCronSync));
 app.use('/api/xml-sources', authenticate, requireTenantAccess, tenantLifecycleGuard, xmlSourceRoutes);

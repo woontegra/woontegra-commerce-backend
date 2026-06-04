@@ -1,6 +1,8 @@
 import prisma from '../../config/database';
 import { logger } from '../../config/logger';
 import { sendEmailAsync } from '../../queues/email.queue';
+import type { EmailJobData } from '../../queues/email-job.types';
+import type { TemplateKey } from '../email/templates';
 import { tenantPaymentSettingsService } from '../payments/tenant-payment-settings.service';
 import {
   orderStatusEmailCopy,
@@ -42,8 +44,9 @@ function customerDisplayName(firstName?: string | null, lastName?: string | null
 }
 
 async function queueStoreTemplate(
+  tenantId: string,
   to: string,
-  template: string,
+  template: TemplateKey,
   templateData: Record<string, unknown>,
   context: Record<string, unknown>,
 ): Promise<void> {
@@ -52,11 +55,14 @@ async function queueStoreTemplate(
     return;
   }
 
-  await sendEmailAsync({
-    to: to.trim(),
-    template: template as never,
+  const job: EmailJobData = {
+    to:           to.trim(),
+    tenantId,
+    template,
     templateData,
-  });
+  };
+
+  await sendEmailAsync(job);
 
   logger.info({ message: '[StoreEmail] E-posta kuyruğa eklendi', template, to: to.trim(), ...context });
 }
@@ -94,6 +100,7 @@ export class StoreEmailService {
       const grandTotal = num(order.totalAmount);
 
       await queueStoreTemplate(
+        tenantId,
         order.customer.email,
         'STORE_ORDER_CREATED',
         {
@@ -196,6 +203,7 @@ export class StoreEmailService {
       });
 
       await queueStoreTemplate(
+        tenantId,
         email,
         'STORE_ORDER_CASH_ON_DELIVERY_CREATED',
         {
@@ -281,6 +289,7 @@ export class StoreEmailService {
       });
 
       await queueStoreTemplate(
+        tenantId,
         email,
         'STORE_ORDER_PAYMENT_RECEIVED',
         {
@@ -363,6 +372,7 @@ export class StoreEmailService {
       });
 
       await queueStoreTemplate(
+        tenantId,
         email,
         'STORE_ORDER_PAYMENT_FAILED',
         {
@@ -453,6 +463,7 @@ export class StoreEmailService {
       });
 
       await queueStoreTemplate(
+        tenantId,
         email,
         'STORE_ORDER_BANK_TRANSFER_PENDING',
         {
@@ -527,6 +538,7 @@ export class StoreEmailService {
       });
 
       await queueStoreTemplate(
+        tenantId,
         email,
         'STORE_ORDER_BANK_TRANSFER_PENDING',
         {
@@ -626,6 +638,7 @@ export class StoreEmailService {
       });
 
       await queueStoreTemplate(
+        tenantId,
         email,
         'STORE_ORDER_BANK_TRANSFER_APPROVED',
         {
@@ -720,6 +733,7 @@ export class StoreEmailService {
       });
 
       await queueStoreTemplate(
+        tenantId,
         email,
         'STORE_ORDER_STATUS_UPDATED',
         {
@@ -789,6 +803,7 @@ export class StoreEmailService {
       if (!branding || !request?.customer?.email || !request.order) return;
 
       await queueStoreTemplate(
+        tenantId,
         request.customer.email,
         'STORE_RETURN_REQUEST_CREATED',
         {
@@ -845,6 +860,7 @@ export class StoreEmailService {
       }
 
       await queueStoreTemplate(
+        tenantId,
         request.customer.email,
         'STORE_RETURN_REQUEST_STATUS_CHANGED',
         {
@@ -887,6 +903,7 @@ export class StoreEmailService {
       if (!branding || !request?.customer?.email || !request.order) return;
 
       await queueStoreTemplate(
+        tenantId,
         request.customer.email,
         'STORE_RETURN_COMPLETED',
         {
@@ -931,6 +948,7 @@ export class StoreEmailService {
       if (!branding) return;
 
       await queueStoreTemplate(
+        tenantId,
         record.returnRequest.customer.email,
         'STORE_REFUND_RECORDED',
         {

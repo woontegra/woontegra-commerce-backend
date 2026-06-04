@@ -70,6 +70,7 @@ export class StoreCustomerPasswordResetService {
     try {
       await sendEmailAsync({
         to:       customer.email,
+        tenantId: tenant.id,
         template: 'STORE_CUSTOMER_PASSWORD_RESET',
         templateData: {
           storeName:  tenant.name,

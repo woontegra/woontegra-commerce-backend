@@ -99,8 +99,30 @@ model Tenant {
   mediaAssets            MediaAsset[]
   navigationMenus        TenantNavigationMenu[]
   contactMessages        ContactMessage[]
+  emailTemplates         EmailTemplate[]
 
   @@map("tenants")
+}
+
+/// Kiracı otomatik e-posta şablonları (panelden düzenlenebilir).
+model EmailTemplate {
+  id        String   @id @default(uuid())
+  tenantId  String
+  key       String
+  name      String
+  subject   String
+  preheader String?
+  bodyHtml  String   @db.Text
+  bodyText  String?  @db.Text
+  isActive  Boolean  @default(true)
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, isActive])
+  @@map("email_templates")
 }
 
 /// Mağaza hostname eşlemesi (subdomain + özel domain); çözümleme ve DNS doğrulama için.

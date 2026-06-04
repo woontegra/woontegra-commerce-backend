@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../../config/database';
 import { AppError } from '../../common/middleware/AppError';
 import { resolveStoreTenant } from '../store-public/store-tenant.util';
+import { queueContactFormNotification } from '../email-templates/email-template.service';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -43,6 +44,16 @@ export async function submitStoreContact(req: Request, res: Response): Promise<v
         message,
         status: 'NEW',
       },
+    });
+
+    void queueContactFormNotification(tenant.id, {
+      storeName:  tenant.name,
+      tenantSlug: tenant.slug,
+      logoUrl:    tenant.logoUrl,
+      name,
+      email,
+      subject,
+      message,
     });
 
     res.status(201).json({

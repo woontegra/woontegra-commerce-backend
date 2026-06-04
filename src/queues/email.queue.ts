@@ -2,55 +2,26 @@ import { Job, Queue, Worker } from 'bullmq';
 import { createQueue, createWorker, isRedisConfigured, QUEUE_NAMES } from '../config/queue';
 import { logger } from '../config/logger';
 import { deliverEmail } from '../modules/email/email.provider';
-import { renderEmailTemplate, type TemplateKey } from '../modules/email/templates';
+import { resolveQueuedEmail } from '../modules/email-templates/email-template.service';
+import type { EmailJobData } from './email-job.types';
+
+export type { EmailJobData } from './email-job.types';
 
 const EMAIL_JOB_ATTEMPTS = parseInt(process.env.EMAIL_QUEUE_ATTEMPTS || '5', 10);
 const EMAIL_JOB_BACKOFF_MS = parseInt(process.env.EMAIL_QUEUE_BACKOFF_MS || '3000', 10);
 
-export interface EmailJobData {
-  to: string;
-  template?: TemplateKey;
-  templateData?: Record<string, unknown>;
-  subject?: string;
-  html?: string;
-  text?: string;
-  from?: string;
-  attachments?: Array<{
-    filename: string;
-    path: string;
-  }>;
-}
-
 let emailQueueInstance: Queue | undefined;
 let emailWorkerInstance: Worker | undefined;
 
-function resolvePayload(data: EmailJobData): { to: string; subject: string; html: string; text?: string; from?: string } {
-  if (data.template) {
-    const rendered = renderEmailTemplate(data.template, data.templateData ?? {});
-    return {
-      to: data.to,
-      subject: rendered.subject,
-      html: rendered.html,
-      text: data.text,
-      from: data.from,
-    };
-  }
-
-  if (!data.subject || !data.html) {
-    throw new Error('E-posta işi: template veya subject+html zorunludur.');
-  }
-
-  return {
-    to: data.to,
-    subject: data.subject,
-    html: data.html,
-    text: data.text,
-    from: data.from,
-  };
-}
-
 async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
-  const resolved = resolvePayload(job.data);
+  const rendered = await resolveQueuedEmail(job.data);
+  const resolved = {
+    to: job.data.to,
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text ?? job.data.text,
+    from: job.data.from,
+  };
 
   logger.info('[EmailQueue] Processing', {
     jobId: job.id,
