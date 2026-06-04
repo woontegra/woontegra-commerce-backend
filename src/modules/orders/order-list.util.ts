@@ -7,6 +7,14 @@ type OperationFilter = (typeof OPERATION_FILTERS)[number];
 function buildOperationFilterClause(
   operationFilter: OperationFilter,
 ): Prisma.OrderWhereInput {
+  if (operationFilter === 'payment_pending') {
+    return {
+      AND: [
+        { status: { not: 'CANCELLED' } },
+        { paymentStatus: { in: ['PENDING', 'WAITING_BANK_TRANSFER'] } },
+      ],
+    };
+  }
   if (operationFilter === 'invoice_missing') {
     return {
       AND: [

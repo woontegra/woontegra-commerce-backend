@@ -22,7 +22,11 @@ const PAYMENT_STATUSES = [
 
 const ORDER_SOURCES = ['all', 'storefront', 'trendyol'] as const;
 
-export const OPERATION_FILTERS = ['invoice_missing', 'tracking_missing'] as const;
+export const OPERATION_FILTERS = [
+  'payment_pending',
+  'invoice_missing',
+  'tracking_missing',
+] as const;
 
 export const orderListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
