@@ -11,6 +11,8 @@ import { orderInvoicePdfUploader, orderInvoicePublicUrl } from './order-invoice.
 
 const VALID_STATUSES = ['PENDING', 'PROCESSING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 
+const BULK_STATUS_VALUES = ['PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const;
+
 export class OrderController {
   private orderService = new OrderService();
 
@@ -279,6 +281,100 @@ export class OrderController {
       res.status(is404 ? 404 : is400 ? 400 : 500).json({
         error: err.message ?? 'Kargo bilgileri kaydedilemedi.',
       });
+    }
+  };
+
+  bulkUpdateStatus = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const tenantId = req.user!.tenantId!;
+      const { orderIds, status } = req.body ?? {};
+
+      if (!Array.isArray(orderIds) || orderIds.length === 0) {
+        res.status(400).json({ error: 'orderIds dizisi zorunludur ve boş olamaz.' });
+        return;
+      }
+
+      if (!status) {
+        res.status(400).json({ error: 'status alanı zorunludur.' });
+        return;
+      }
+
+      const normalized = String(status).toUpperCase();
+      if (!BULK_STATUS_VALUES.includes(normalized as (typeof BULK_STATUS_VALUES)[number])) {
+        res.status(400).json({
+          error: `Geçersiz status. Toplu güncelleme için: ${BULK_STATUS_VALUES.join(', ')}`,
+        });
+        return;
+      }
+
+      const result = await this.orderService.bulkUpdateStatus(
+        tenantId,
+        orderIds,
+        normalized,
+        { notifyCustomer: true },
+      );
+
+      for (const row of result.updated) {
+        if (row.previousStatus === normalized) continue;
+
+        const order = await this.orderService.getById(row.id, tenantId);
+        if (!order) continue;
+
+        if (normalized === 'COMPLETED') {
+          try {
+            await invoiceService.processOrderCompletion(row.id);
+          } catch (invoiceError) {
+            console.error('Failed to generate invoice for completed order:', invoiceError);
+          }
+        }
+
+        eventBus.emit('ORDER_STATUS_CHANGED', {
+          tenantId,
+          orderId:       row.id,
+          orderNumber:   row.orderNumber,
+          newStatus:     normalized,
+          customerEmail: (order as { customer?: { email?: string } }).customer?.email ?? '',
+          customerName:  (order as { customer?: { firstName?: string; lastName?: string } }).customer
+            ? `${(order as { customer: { firstName: string; lastName: string } }).customer.firstName} ${(order as { customer: { firstName: string; lastName: string } }).customer.lastName}`.trim()
+            : '',
+        });
+
+        auditService.log({
+          userId:    req.user!.id,
+          userEmail: req.user!.email,
+          userRole:  req.user!.role,
+          tenantId,
+          action:    AuditAction.ORDER_STATUS_CHANGED,
+          category:  AuditCategory.ORDER,
+          targetType: 'Order',
+          targetId:   row.id,
+          targetName: row.orderNumber,
+          details:   { newStatus: normalized, previousStatus: row.previousStatus, bulk: true },
+          req,
+        }).catch(() => {});
+      }
+
+      const statusCode = result.failures.length > 0 && result.updatedCount === 0 ? 422 : 200;
+      res.status(statusCode).json({
+        status: statusCode === 200 ? 'success' : 'error',
+        data: {
+          updatedCount: result.updatedCount,
+          skippedCount: result.skippedIds.length,
+          skippedIds:   result.skippedIds,
+          failedCount:  result.failures.length,
+          failures:     result.failures,
+        },
+        ...(result.failures.length > 0 && result.updatedCount === 0
+          ? { error: result.failures[0]?.error ?? 'Hiçbir sipariş güncellenemedi.' }
+          : {}),
+      });
+    } catch (err: unknown) {
+      const e = err as { statusCode?: number; message?: string };
+      if (e?.statusCode === 400) {
+        res.status(400).json({ error: e.message ?? 'Geçersiz istek.' });
+        return;
+      }
+      res.status(500).json({ error: e.message ?? 'Toplu durum güncellenemedi.' });
     }
   };
 

@@ -662,6 +662,65 @@ export class OrderService {
     return order;
   }
 
+  /** Toplu durum güncelleme — yalnızca tenant’a ait siparişler; tekil updateStatus kullanır. */
+  async bulkUpdateStatus(
+    tenantId: string,
+    orderIds: string[],
+    newStatus: string,
+    options?: OrderStatusUpdateOptions,
+  ): Promise<{
+    updatedCount: number;
+    skippedIds: string[];
+    updated: Array<{ id: string; orderNumber: string; previousStatus: string }>;
+    failures: Array<{ id: string; error: string }>;
+  }> {
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      throw Object.assign(new Error('En az bir sipariş seçilmelidir.'), { statusCode: 400 });
+    }
+
+    const uniqueIds = [...new Set(orderIds.map((id) => String(id).trim()).filter(Boolean))];
+    if (uniqueIds.length === 0) {
+      throw Object.assign(new Error('En az bir sipariş seçilmelidir.'), { statusCode: 400 });
+    }
+
+    const rows = await prisma.order.findMany({
+      where: { id: { in: uniqueIds }, tenantId },
+      select: { id: true, orderNumber: true, status: true },
+    });
+
+    const foundIds = new Set(rows.map((r) => r.id));
+    const skippedIds = uniqueIds.filter((id) => !foundIds.has(id));
+
+    const updated: Array<{ id: string; orderNumber: string; previousStatus: string }> = [];
+    const failures: Array<{ id: string; error: string }> = [];
+
+    for (const row of rows) {
+      const previousStatus = String(row.status);
+      if (previousStatus === newStatus) {
+        continue;
+      }
+      try {
+        const order = await this.updateStatus(row.id, newStatus, tenantId, options);
+        updated.push({
+          id:               row.id,
+          orderNumber:      order.orderNumber,
+          previousStatus,
+        });
+        void order;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Durum güncellenemedi.';
+        failures.push({ id: row.id, error: msg });
+      }
+    }
+
+    return {
+      updatedCount: updated.length,
+      skippedIds,
+      updated,
+      failures,
+    };
+  }
+
   // ── Shipping info (admin) ─────────────────────────────────────────────────
 
   async updateShipping(
