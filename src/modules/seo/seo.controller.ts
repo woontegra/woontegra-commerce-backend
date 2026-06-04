@@ -10,6 +10,66 @@ import {
   generateCategoryPageStructuredData,
   generateStorePageStructuredData
 } from '../../common/utils/structured-data.utils';
+import {
+  escapeXmlLoc,
+  resolveStorefrontAbsoluteUrl,
+  storefrontCategoryPath,
+  storefrontHomePath,
+  storefrontProductPath,
+  storefrontProductsListPath,
+  storefrontUsesCustomDomain,
+} from '../store-public/store-public-seo.util';
+
+const STOREFRONT_ROBOTS_DISALLOW = [
+  '/store/sepet',
+  '/store/odeme',
+  '/store/hesabim',
+  '/store/giris',
+  '/store/kayit',
+  '/store/sifremi-unuttum',
+  '/store/sifre-sifirla',
+  '/store/odeme-basarili',
+  '/store/odeme-basarisiz',
+  '/store/odeme-bekleniyor',
+  '/store/siparis-basarili',
+  '/store/odeme/paytr',
+  '/store/odeme/iyzico',
+] as const;
+
+type SitemapUrlEntry = {
+  loc: string;
+  lastmod?: Date;
+  changefreq?: string;
+  priority?: string;
+};
+
+function resolveSeoSitemapEndpointUrl(req: Request, tenantSlug: string): string {
+  const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+  const host = (req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  const apiBase = host ? `${proto}://${host}` : '';
+  const path = `/api/seo/sitemap/${encodeURIComponent(tenantSlug)}.xml`;
+  return apiBase ? `${apiBase}${path}` : path;
+}
+
+function buildSitemapXml(entries: SitemapUrlEntry[]): string {
+  const body = entries
+    .map(entry => {
+      const loc = escapeXmlLoc(entry.loc);
+      const lastmod = entry.lastmod
+        ? `\n    <lastmod>${entry.lastmod.toISOString()}</lastmod>`
+        : '';
+      const changefreq = entry.changefreq
+        ? `\n    <changefreq>${entry.changefreq}</changefreq>`
+        : '';
+      const priority = entry.priority
+        ? `\n    <priority>${entry.priority}</priority>`
+        : '';
+      return `  <url>\n    <loc>${loc}</loc>${lastmod}${changefreq}${priority}\n  </url>`;
+    })
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>`;
+}
 
 export class SEOController {
   // Get store data by tenant slug
@@ -262,112 +322,123 @@ export class SEOController {
 
   // Generate sitemap
   generateSitemap = asyncHandler(async (req: Request, res: Response) => {
-    const { tenantSlug } = req.params;
-    
-    // Find tenant
+    const tenantSlug = typeof req.params.tenantSlug === 'string' ? req.params.tenantSlug.trim() : '';
+
     const tenant = await prisma.tenant.findFirst({
-      where: { 
+      where: {
         slug: tenantSlug,
-        isActive: true 
-      }
+        isActive: true,
+      },
+      select: {
+        id: true,
+        slug: true,
+        customDomain: true,
+        domainVerified: true,
+      },
     });
 
     if (!tenant) {
       throw createNotFoundError('Store not found');
     }
 
-    // Get all products and categories
+    const useCustom = storefrontUsesCustomDomain(tenant.customDomain, tenant.domainVerified);
+    const abs = (path: string) =>
+      resolveStorefrontAbsoluteUrl(
+        tenant.slug,
+        path,
+        tenant.customDomain,
+        tenant.domainVerified,
+      );
+
     const [products, categories] = await Promise.all([
       prisma.product.findMany({
         where: {
           tenantId: tenant.id,
-          isActive: true
+          isActive: true,
+          status: 'active',
         },
-        include: {
-          category: true
-        }
+        select: {
+          slug: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: 'desc' },
       }),
       prisma.category.findMany({
         where: {
           tenantId: tenant.id,
-          isActive: true
-        }
-      })
+          isActive: true,
+        },
+        select: {
+          slug: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
     ]);
 
-    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://${tenant.slug}.woontegra.com/</loc>
-    <lastmod>${new Date().toISOString()}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  ${products.map(product => `
-  <url>
-    <loc>https://${tenant.slug}.woontegra.com/product/${product.slug}</loc>
-    <lastmod>${product.updatedAt.toISOString()}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  `).join('')}
-  ${categories.map(category => `
-  <url>
-    <loc>https://${tenant.slug}.woontegra.com/category/${category.slug}</loc>
-    <lastmod>${category.updatedAt.toISOString()}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  `).join('')}
-</urlset>
-</sitemap>`;
+    const now = new Date();
+    const entries: SitemapUrlEntry[] = [
+      {
+        loc: abs(storefrontHomePath(tenant.slug, useCustom)),
+        lastmod: now,
+        changefreq: 'daily',
+        priority: '1.0',
+      },
+      {
+        loc: abs(storefrontProductsListPath(tenant.slug, useCustom)),
+        lastmod: now,
+        changefreq: 'daily',
+        priority: '0.9',
+      },
+      ...categories.map(category => ({
+        loc: abs(storefrontCategoryPath(category.slug, tenant.slug, useCustom)),
+        lastmod: category.updatedAt,
+        changefreq: 'weekly',
+        priority: '0.7',
+      })),
+      ...products.map(product => ({
+        loc: abs(storefrontProductPath(product.slug, tenant.slug, useCustom)),
+        lastmod: product.updatedAt,
+        changefreq: 'weekly',
+        priority: '0.6',
+      })),
+    ];
 
     res.setHeader('Content-Type', 'application/xml');
-    res.send(sitemap);
+    res.send(buildSitemapXml(entries));
   });
 
   // Generate robots.txt
   generateRobotsTxt = asyncHandler(async (req: Request, res: Response) => {
-    const { tenantSlug } = req.params;
-    
-    // Find tenant
+    const tenantSlug = typeof req.params.tenantSlug === 'string' ? req.params.tenantSlug.trim() : '';
+
     const tenant = await prisma.tenant.findFirst({
-      where: { 
+      where: {
         slug: tenantSlug,
-        isActive: true 
-      }
+        isActive: true,
+      },
+      select: { slug: true },
     });
 
     if (!tenant) {
       throw createNotFoundError('Store not found');
     }
 
-    const robotsTxt = `User-agent: *
-Allow: /
-
-# Store pages
-${products.map(product => `Allow: /product/${product.slug}`).join('\n')}
-
-# Category pages
-${categories.map(category => `Allow: /category/${category.slug}`).join('\n')}
-
-# Sitemap
-Allow: /sitemap/${tenantSlug}.xml
-
-# Disallow
-Disallow: /admin/*
-Disallow: /api/*
-Disallow: /dashboard/*
-Disallow: /cart/*
-
-# Crawl delay
-Crawl-delay: 1
-
-# Host
-Host: ${tenant.slug}.woontegra.com
-Sitemap: https://${tenantSlug}.woontegra.com/sitemap/${tenantSlug}.xml`;
+    const sitemapUrl = resolveSeoSitemapEndpointUrl(req, tenant.slug);
+    const lines = [
+      'User-agent: *',
+      'Allow: /',
+      '',
+      ...STOREFRONT_ROBOTS_DISALLOW.map(path => `Disallow: ${path}`),
+      '',
+      'Disallow: /admin/',
+      'Disallow: /api/',
+      'Disallow: /dashboard/',
+      '',
+      `Sitemap: ${sitemapUrl}`,
+    ];
 
     res.setHeader('Content-Type', 'text/plain');
-    res.send(robotsTxt);
+    res.send(lines.join('\n'));
   });
 }
