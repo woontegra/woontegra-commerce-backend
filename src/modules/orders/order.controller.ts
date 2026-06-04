@@ -132,6 +132,10 @@ export class OrderController {
         res.status(422).json({ error: err.message, meta: err.meta });
         return;
       }
+      if (err?.statusCode === 422) {
+        res.status(422).json({ error: err.message ?? 'İstek reddedildi.' });
+        return;
+      }
       res.status(500).json({ error: err.message ?? 'Sipariş oluşturulamadı.' });
     }
   };

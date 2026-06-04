@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient, TenantUsageAction } from '@prisma/client';
 import prisma from '../../config/database';
+import { logger } from '../../config/logger';
 import { logTenantUsage } from '../../services/tenantUsageLog.service';
 import { CouponService, calcDiscount } from '../coupons/coupon.service';
 import { CampaignService, CartItem as CampaignCartItem } from '../campaigns/campaign.service';
@@ -224,6 +225,9 @@ export class StockError extends Error {
 
 const CANCELLED_STATUS = 'CANCELLED';
 
+export const PANEL_MANUAL_ORDER_BLOCKED_CUSTOMER_MESSAGE =
+  'Bu müşteri engelli olduğu için manuel sipariş oluşturulamaz.';
+
 // ── Service ────────────────────────────────────────────────────────────────
 
 export class OrderService {
@@ -409,13 +413,28 @@ export class OrderService {
       throw new Error('En az bir ürün eklenmelidir.');
     }
 
-    // ── Customer tenant isolation check ───────────────────────────────────
+    // ── Customer tenant isolation + panel manual order block ───────────────
     const customer = await prisma.customer.findFirst({
       where: { id: customerId, tenantId },
-      select: { id: true },
+      select: { id: true, email: true, isBlocked: true, blockedReason: true },
     });
     if (!customer) {
       throw new Error('Müşteri bulunamadı veya bu hesaba ait değil.');
+    }
+    if (customer.isBlocked) {
+      logger.warn({
+        message:    'Blocked customer manual panel order rejected',
+        tenantId,
+        customerId: customer.id,
+        email:      customer.email,
+        ...(customer.blockedReason?.trim()
+          ? { blockedReason: customer.blockedReason.trim() }
+          : {}),
+      });
+      throw Object.assign(
+        new Error(PANEL_MANUAL_ORDER_BLOCKED_CUSTOMER_MESSAGE),
+        { statusCode: 422 },
+      );
     }
 
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
