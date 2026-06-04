@@ -29,6 +29,7 @@ import settingsRoutes from './modules/settings/settings.routes';
 import planRoutes from './modules/plan/plan.routes';
 import supportRoutes from './modules/support/support.routes';
 import seoRoutes from './modules/seo/seo.routes';
+import blogRoutes from './modules/blog/blog.routes';
 import { marketplaceRoutes } from './modules/marketplace/marketplace.routes';
 import marketplaceHubRoutes from './modules/marketplace/core/services/marketplace-hub.routes';
 import billingRoutes from './modules/billing/billing.routes';
@@ -208,6 +209,7 @@ app.use('/api/webhooks',       webhookRoutes);
 app.use('/api/v1',             publicApiRouter);  // Public REST API (API token auth)
 app.use('/api/support', supportRoutes);
 app.use('/api/seo', seoRoutes);
+app.use('/api/blog', blogRoutes);
 app.use('/api/store', storePublicRoutes);
 app.use('/api/storefront-builder', storefrontBuilderRoutes);
 app.use('/api/media', mediaRoutes);

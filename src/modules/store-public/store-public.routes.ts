@@ -15,6 +15,7 @@ import * as shipCtrl from './store-shipping.controller';
 import * as authCtrl from './store-customer-auth.controller';
 import * as favCtrl from './store-favorites.controller';
 import * as returnCtrl from './store-return-request.controller';
+import * as blogCtrl from './store-public-blog.controller';
 import { getPublicHomeLayout } from '../storefront-builder/storefront-builder.controller';
 import { requireStoreCustomer, optionalStoreCustomer } from './store-customer-auth.middleware';
 
@@ -48,6 +49,8 @@ router.get('/products', ctrl.listProducts);
 router.get('/home-layout', getPublicHomeLayout);
 router.get('/products/:slug', ctrl.getProductBySlug);
 router.get('/categories', ctrl.listCategories);
+router.get('/blog', blogCtrl.listStoreBlogPosts);
+router.get('/blog/:slug', blogCtrl.getStoreBlogPostBySlug);
 router.get('/payments/methods', ctrl.listStorePaymentMethods);
 router.post('/shipping/calculate', shipCtrl.calculateStoreShipping);
 router.post('/orders', optionalStoreCustomer, ctrl.createStoreOrder);

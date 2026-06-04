@@ -85,6 +85,22 @@ export function storefrontProductPath(
   );
 }
 
+export function storefrontBlogListPath(tenantSlug: string, useCustomDomain: boolean): string {
+  return appendTenantQuery('/store/blog', tenantSlug, useCustomDomain);
+}
+
+export function storefrontBlogPostPath(
+  postSlug: string,
+  tenantSlug: string,
+  useCustomDomain: boolean,
+): string {
+  return appendTenantQuery(
+    `/store/blog/${encodeURIComponent(postSlug)}`,
+    tenantSlug,
+    useCustomDomain,
+  );
+}
+
 /** Sitemap XML içinde güvenli &lt;loc&gt; değeri. */
 export function escapeXmlLoc(url: string): string {
   return url

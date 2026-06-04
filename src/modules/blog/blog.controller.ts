@@ -1,70 +1,81 @@
 import { Response } from 'express';
 import { AuthRequest } from '../../common/middleware/auth.middleware';
-import { PrismaClient } from '@prisma/client';
-import { AppError } from '../../common/middleware/error.middleware';
+import prisma from '../../config/database';
+import { AppError } from '../../common/middleware/AppError';
 
-const prisma = new PrismaClient();
+const authorSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+} as const;
+
+function tenantIdFromReq(req: AuthRequest): string {
+  const id = req.user?.tenantId;
+  if (!id) throw new AppError('Tenant information missing', 403);
+  return id;
+}
+
+function authorIdFromReq(req: AuthRequest): string {
+  const id = req.user?.userId ?? req.user?.id;
+  if (!id) throw new AppError('Authentication required', 401);
+  return id;
+}
+
+function normalizeTags(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map(t => String(t).trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    return raw.split(',').map(t => t.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function parsePublishedAt(raw: unknown): Date | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === '') return null;
+  const d = new Date(String(raw));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 export class BlogController {
   getAll = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { published } = req.query;
-      const tenantId = req.user!.tenantId;
+      const tenantId = tenantIdFromReq(req);
 
       const posts = await prisma.post.findMany({
         where: {
           tenantId,
-          ...(published === 'true' && { isPublished: true }),
+          ...(published === 'true' ? { isPublished: true } : {}),
         },
-        include: {
-          author: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        include: { author: { select: authorSelect } },
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
       });
 
-      res.status(200).json({
-        status: 'success',
-        data: posts,
-      });
+      res.status(200).json({ status: 'success', data: posts });
     } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ error: error.message });
+        return;
+      }
       res.status(500).json({ error: 'Failed to fetch posts' });
     }
   };
 
   getById = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const id = req.params.id as string;
-      const tenantId = req.user!.tenantId;
+      const id = String(req.params.id ?? '');
+      const tenantId = tenantIdFromReq(req);
 
       const post = await prisma.post.findFirst({
         where: { id, tenantId },
-        include: {
-          author: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
+        include: { author: { select: authorSelect } },
       });
 
-      if (!post) {
-        throw new AppError('Post not found', 404);
-      }
+      if (!post) throw new AppError('Post not found', 404);
 
-      res.status(200).json({
-        status: 'success',
-        data: post,
-      });
+      res.status(200).json({ status: 'success', data: post });
     } catch (error) {
       if (error instanceof AppError) {
         res.status(error.statusCode).json({ error: error.message });
@@ -74,32 +85,20 @@ export class BlogController {
     }
   };
 
+  /** Panel önizleme — taslak dahil. */
   getBySlug = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const slug = req.params.slug as string;
-      const tenantId = req.user!.tenantId;
+      const slug = String(req.params.slug ?? '').trim();
+      const tenantId = tenantIdFromReq(req);
 
       const post = await prisma.post.findFirst({
-        where: { slug, tenantId, isPublished: true },
-        include: {
-          author: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
+        where: { slug, tenantId },
+        include: { author: { select: authorSelect } },
       });
 
-      if (!post) {
-        throw new AppError('Post not found', 404);
-      }
+      if (!post) throw new AppError('Post not found', 404);
 
-      res.status(200).json({
-        status: 'success',
-        data: post,
-      });
+      res.status(200).json({ status: 'success', data: post });
     } catch (error) {
       if (error instanceof AppError) {
         res.status(error.statusCode).json({ error: error.message });
@@ -111,45 +110,58 @@ export class BlogController {
 
   create = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const tenantId = req.user!.tenantId;
-      const authorId = req.user!.id;
-      const { title, content, slug, excerpt, coverImage, isPublished } = req.body;
+      const tenantId = tenantIdFromReq(req);
+      const authorId = authorIdFromReq(req);
+      const {
+        title,
+        content,
+        slug,
+        excerpt,
+        coverImage,
+        category,
+        tags,
+        metaTitle,
+        metaDescription,
+        isPublished,
+        publishedAt: publishedAtRaw,
+      } = req.body ?? {};
 
-      if (!title || !content || !slug) {
+      if (!title?.trim() || !content?.trim() || !slug?.trim()) {
         throw new AppError('Title, content, and slug are required', 400);
       }
 
+      const publish = Boolean(isPublished);
+      const publishedAtParsed = parsePublishedAt(publishedAtRaw);
+      const publishedAt = publish
+        ? (publishedAtParsed ?? new Date())
+        : null;
+
       const post = await prisma.post.create({
         data: {
-          title,
-          content,
-          slug,
-          excerpt,
-          coverImage,
-          isPublished: isPublished || false,
-          publishedAt: isPublished ? new Date() : null,
+          title: String(title).trim(),
+          content: String(content),
+          slug: String(slug).trim(),
+          excerpt: excerpt?.trim() || null,
+          coverImage: coverImage?.trim() || null,
+          category: category?.trim() || null,
+          tags: normalizeTags(tags),
+          metaTitle: metaTitle?.trim() || null,
+          metaDescription: metaDescription?.trim() || null,
+          isPublished: publish,
+          publishedAt,
           tenantId,
           authorId,
         },
-        include: {
-          author: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
+        include: { author: { select: authorSelect } },
       });
 
-      res.status(201).json({
-        status: 'success',
-        data: post,
-      });
-    } catch (error: any) {
-      if (error.code === 'P2002') {
+      res.status(201).json({ status: 'success', data: post });
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'P2002') {
         res.status(400).json({ error: 'Bu slug zaten kullanılıyor' });
-      } else if (error instanceof AppError) {
+        return;
+      }
+      if (error instanceof AppError) {
         res.status(error.statusCode).json({ error: error.message });
       } else {
         res.status(500).json({ error: 'Failed to create post' });
@@ -159,46 +171,59 @@ export class BlogController {
 
   update = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const id = req.params.id as string;
-      const tenantId = req.user!.tenantId;
-      const { title, content, slug, excerpt, coverImage, isPublished } = req.body;
+      const id = String(req.params.id ?? '');
+      const tenantId = tenantIdFromReq(req);
+      const {
+        title,
+        content,
+        slug,
+        excerpt,
+        coverImage,
+        category,
+        tags,
+        metaTitle,
+        metaDescription,
+        isPublished,
+        publishedAt: publishedAtRaw,
+      } = req.body ?? {};
 
-      // Check if post exists and belongs to tenant
-      const existingPost = await prisma.post.findFirst({
-        where: { id, tenantId },
-      });
+      const existingPost = await prisma.post.findFirst({ where: { id, tenantId } });
+      if (!existingPost) throw new AppError('Post not found', 404);
 
-      if (!existingPost) {
-        throw new AppError('Post not found', 404);
+      const publish = isPublished !== undefined ? Boolean(isPublished) : existingPost.isPublished;
+      let publishedAt = existingPost.publishedAt;
+      if (publishedAtRaw !== undefined) {
+        publishedAt = parsePublishedAt(publishedAtRaw) ?? null;
+      } else if (publish && !existingPost.isPublished) {
+        publishedAt = new Date();
+      } else if (!publish) {
+        publishedAt = null;
       }
 
       const post = await prisma.post.update({
         where: { id },
         data: {
-          title,
-          content,
-          slug,
-          excerpt,
-          coverImage,
-          isPublished,
-          publishedAt: isPublished && !existingPost.isPublished ? new Date() : existingPost.publishedAt,
+          ...(title !== undefined ? { title: String(title).trim() } : {}),
+          ...(content !== undefined ? { content: String(content) } : {}),
+          ...(slug !== undefined ? { slug: String(slug).trim() } : {}),
+          ...(excerpt !== undefined ? { excerpt: excerpt?.trim() || null } : {}),
+          ...(coverImage !== undefined ? { coverImage: coverImage?.trim() || null } : {}),
+          ...(category !== undefined ? { category: category?.trim() || null } : {}),
+          ...(tags !== undefined ? { tags: normalizeTags(tags) } : {}),
+          ...(metaTitle !== undefined ? { metaTitle: metaTitle?.trim() || null } : {}),
+          ...(metaDescription !== undefined ? { metaDescription: metaDescription?.trim() || null } : {}),
+          ...(isPublished !== undefined ? { isPublished: publish } : {}),
+          publishedAt,
         },
-        include: {
-          author: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
+        include: { author: { select: authorSelect } },
       });
 
-      res.status(200).json({
-        status: 'success',
-        data: post,
-      });
-    } catch (error) {
+      res.status(200).json({ status: 'success', data: post });
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'P2002') {
+        res.status(400).json({ error: 'Bu slug zaten kullanılıyor' });
+        return;
+      }
       if (error instanceof AppError) {
         res.status(error.statusCode).json({ error: error.message });
       } else {
@@ -209,26 +234,15 @@ export class BlogController {
 
   delete = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const id = req.params.id as string;
-      const tenantId = req.user!.tenantId;
+      const id = String(req.params.id ?? '');
+      const tenantId = tenantIdFromReq(req);
 
-      // Check if post exists and belongs to tenant
-      const existingPost = await prisma.post.findFirst({
-        where: { id, tenantId },
-      });
+      const existingPost = await prisma.post.findFirst({ where: { id, tenantId } });
+      if (!existingPost) throw new AppError('Post not found', 404);
 
-      if (!existingPost) {
-        throw new AppError('Post not found', 404);
-      }
+      await prisma.post.delete({ where: { id } });
 
-      await prisma.post.delete({
-        where: { id },
-      });
-
-      res.status(200).json({
-        status: 'success',
-        message: 'Post deleted successfully',
-      });
+      res.status(200).json({ status: 'success', message: 'Post deleted successfully' });
     } catch (error) {
       if (error instanceof AppError) {
         res.status(error.statusCode).json({ error: error.message });
