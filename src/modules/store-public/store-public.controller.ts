@@ -308,7 +308,7 @@ export async function createStoreOrder(req: StoreCustomerAuthRequest, res: Respo
       return;
     }
     const msg = e instanceof Error ? e.message : 'Sipariş oluşturulamadı.';
-    const isClient = /bulunamadı|yetersiz|geçersiz|en az|satışa kapalı|kabul/i.test(msg);
+    const isClient = /bulunamadı|yetersiz|geçersiz|en az|satışa kapalı|kabul|kısıtlan/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, error: msg });
   }
 }

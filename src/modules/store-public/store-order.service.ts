@@ -1,6 +1,7 @@
 import { OrderStatus, type PaymentProviderType } from '@prisma/client';
 import { initialOrderPaymentStatus } from '../orders/order-payment.util';
 import prisma from '../../config/database';
+import { logger } from '../../config/logger';
 import { OrderService, StockError, type CreateOrderItemDto } from '../orders/order.service';
 import { storePaymentProviderService } from '../payments/store-payment-provider.service';
 import { storeShippingCalculationService } from '../shipping/store-shipping-calculation.service';
@@ -28,6 +29,26 @@ function effectiveUnitPrice(sale: number, discount: number | null): number {
 function formatAddressBlock(a: StoreAddressBlock): string {
   const zip = a.postalCode?.trim() ? ` ${a.postalCode}` : '';
   return `${a.fullName} · ${a.phone}\n${a.addressLine}\n${a.district} / ${a.city}${zip}`;
+}
+
+export const STORE_CUSTOMER_CHECKOUT_BLOCKED_MESSAGE =
+  'Bu müşteri hesabı için sipariş oluşturma geçici olarak kısıtlanmıştır. Lütfen mağaza ile iletişime geçin.';
+
+function assertCustomerCanCheckout(
+  tenantId: string,
+  customer: { id: string; email: string; isBlocked: boolean; blockedReason?: string | null },
+): void {
+  if (!customer.isBlocked) return;
+  logger.warn({
+    message: 'Blocked customer attempted storefront checkout',
+    tenantId,
+    customerId: customer.id,
+    email:      customer.email,
+    ...(customer.blockedReason?.trim()
+      ? { blockedReason: customer.blockedReason.trim() }
+      : {}),
+  });
+  throw new Error(STORE_CUSTOMER_CHECKOUT_BLOCKED_MESSAGE);
 }
 
 export class StoreOrderService {
@@ -188,6 +209,8 @@ export class StoreOrderService {
         });
       }
     }
+
+    assertCustomerCanCheckout(tenantId, customerRow);
 
     if (paymentProvider) {
       const methods = await storePaymentProviderService.listActiveMethodsForStorefront(tenantId);
