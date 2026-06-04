@@ -49,6 +49,7 @@ export const createStoreOrderSchema = z.object({
     companyName:    z.string().optional(),
   }),
   notes: z.string().max(2000).optional().default(''),
+  couponCode: z.string().max(32).optional(),
   paymentProvider: paymentProviderEnum.optional(),
   consents: z.object({
     kvkkConsent:      z.boolean(),

@@ -3,6 +3,8 @@ import { initialOrderPaymentStatus } from '../orders/order-payment.util';
 import prisma from '../../config/database';
 import { logger } from '../../config/logger';
 import { OrderService, StockError, type CreateOrderItemDto } from '../orders/order.service';
+import { CampaignService, type CartItem as CampaignCartItem } from '../campaigns/campaign.service';
+import { CouponService, type CouponValidationResult } from '../coupons/coupon.service';
 import { storePaymentProviderService } from '../payments/store-payment-provider.service';
 import { storeShippingCalculationService } from '../shipping/store-shipping-calculation.service';
 import { storeEmailService } from './store-email.service';
@@ -55,21 +57,44 @@ export class StoreOrderService {
   private readonly orderService = new OrderService();
 
   /**
-   * Mağaza vitrini siparişi — fiyatlar sunucuda hesaplanır, stok OrderService.create ile düşer.
+   * Sepet satırlarından kampanya sonrası tutar üzerinde kupon doğrulama (vitrin önizleme).
    */
-  async create(
+  async validateCoupon(
     tenantId: string,
-    input: CreateStoreOrderInput,
-    opts?: { authenticatedCustomerId?: string },
-  ) {
-    const { items, customer, billingAddress, notes, paymentProvider, consents } = input;
-    const deliveryAddress: StoreAddressBlock = input.shippingAddress;
-    const isGuest = !opts?.authenticatedCustomerId;
+    code: string,
+    items: CreateStoreOrderInput['items'],
+    customerId?: string,
+  ): Promise<CouponValidationResult> {
+    const orderItems = await this.buildPricedOrderItems(tenantId, items);
+    const subtotal = orderItems.reduce((s, i) => s + i.price * i.quantity, 0);
 
-    if (isGuest && !consents?.kvkkConsent) {
-      throw new Error('KVKK aydınlatma metnini kabul etmelisiniz.');
+    const productCategoryMap = new Map<string, string | null>();
+    const products = await prisma.product.findMany({
+      where:  { id: { in: [...new Set(orderItems.map(i => i.productId))] }, tenantId },
+      select: { id: true, categoryId: true },
+    });
+    for (const p of products) {
+      productCategoryMap.set(p.id, p.categoryId ?? null);
     }
 
+    const cartItems: CampaignCartItem[] = orderItems.map(item => ({
+      productId:  item.productId,
+      variantId:  item.variantId,
+      quantity:   item.quantity,
+      price:      item.price,
+      categoryId: productCategoryMap.get(item.productId) ?? undefined,
+    }));
+
+    const campaignResult = await new CampaignService().applyToCart(cartItems, tenantId);
+    const afterCampaignTotal = Math.max(0, subtotal - (campaignResult.savings ?? 0));
+
+    return new CouponService().validate(code, afterCampaignTotal, tenantId, customerId);
+  }
+
+  private async buildPricedOrderItems(
+    tenantId: string,
+    items: CreateStoreOrderInput['items'],
+  ): Promise<CreateOrderItemDto[]> {
     const orderItems: CreateOrderItemDto[] = [];
 
     for (const line of items) {
@@ -80,10 +105,7 @@ export class StoreOrderService {
           isActive: true,
           status:   'active',
         },
-        include: {
-          pricing: true,
-          stock:   { select: { quantity: true } },
-        },
+        include: { pricing: true },
       });
 
       if (!product) {
@@ -114,21 +136,6 @@ export class StoreOrderService {
         } else if (variant.discountPrice != null) {
           unitPrice = num(variant.discountPrice);
         }
-        const available = Number(variant.stockQuantity);
-        if (available < line.quantity) {
-          throw new StockError(
-            `Yetersiz stok: "${product.name}" (${variant.name}) — mevcut: ${available}, istenen: ${line.quantity}`,
-            { productId: product.id, variantId: variant.id, available, requested: line.quantity },
-          );
-        }
-      } else {
-        const stock = product.stock;
-        if (stock && Number(stock.quantity) < line.quantity) {
-          throw new StockError(
-            `Yetersiz stok: "${product.name}" — mevcut: ${Number(stock.quantity)}, istenen: ${line.quantity}`,
-            { productId: product.id, available: Number(stock.quantity), requested: line.quantity },
-          );
-        }
       }
 
       if (unitPrice <= 0) {
@@ -141,6 +148,58 @@ export class StoreOrderService {
         quantity:  line.quantity,
         price:     unitPrice,
       });
+    }
+
+    return orderItems;
+  }
+
+  /**
+   * Mağaza vitrini siparişi — fiyatlar sunucuda hesaplanır, stok OrderService.create ile düşer.
+   */
+  async create(
+    tenantId: string,
+    input: CreateStoreOrderInput,
+    opts?: { authenticatedCustomerId?: string },
+  ) {
+    const { items, customer, billingAddress, notes, paymentProvider, consents } = input;
+    const deliveryAddress: StoreAddressBlock = input.shippingAddress;
+    const isGuest = !opts?.authenticatedCustomerId;
+
+    if (isGuest && !consents?.kvkkConsent) {
+      throw new Error('KVKK aydınlatma metnini kabul etmelisiniz.');
+    }
+
+    const orderItems = await this.buildPricedOrderItems(tenantId, items);
+
+    for (const line of items) {
+      const product = await prisma.product.findFirst({
+        where: { id: line.productId, tenantId },
+        include: { stock: { select: { quantity: true } } },
+      });
+      if (!product) continue;
+
+      if (line.variantId) {
+        const variant = await prisma.productVariant.findFirst({
+          where: { id: line.variantId, productId: product.id, isActive: true },
+        });
+        if (variant) {
+          const available = Number(variant.stockQuantity);
+          if (available < line.quantity) {
+            throw new StockError(
+              `Yetersiz stok: "${product.name}" (${variant.name}) — mevcut: ${available}, istenen: ${line.quantity}`,
+              { productId: product.id, variantId: variant.id, available, requested: line.quantity },
+            );
+          }
+        }
+      } else {
+        const stock = product.stock;
+        if (stock && Number(stock.quantity) < line.quantity) {
+          throw new StockError(
+            `Yetersiz stok: "${product.name}" — mevcut: ${Number(stock.quantity)}, istenen: ${line.quantity}`,
+            { productId: product.id, available: Number(stock.quantity), requested: line.quantity },
+          );
+        }
+      }
     }
 
     const email = customer.email.trim().toLowerCase();
@@ -284,7 +343,7 @@ export class StoreOrderService {
         paymentStatus: storefrontProvider
           ? initialOrderPaymentStatus(storefrontProvider)
           : undefined,
-        // Kupon vitrin adımında TODO — couponCode gönderilmez
+        ...(input.couponCode?.trim() ? { couponCode: input.couponCode.trim() } : {}),
       },
       tenantId,
     );

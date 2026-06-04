@@ -502,52 +502,90 @@ export class OrderService {
 
     if (couponCode?.trim()) {
       const couponSvc = new CouponService();
-      const validation = await couponSvc.validate(couponCode.trim(), afterCampaignTotal, tenantId);
+      const validation = await couponSvc.validate(
+        couponCode.trim(),
+        afterCampaignTotal,
+        tenantId,
+        customerId,
+      );
 
       if (!validation.valid) {
         throw new Error(validation.error ?? 'Geçersiz kupon kodu.');
       }
 
-      couponId      = validation.coupon!.id;
+      couponId       = validation.coupon!.id;
       couponDiscount = validation.discountAmount;
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Deduct stock — throws StockError on failure
+    // Kupon limitleri — transaction dışında (yalnızca okuma; yazma tx içinde kalır)
+    if (couponId) {
+      const couponRow = await prisma.coupon.findUnique({
+        where:  { id: couponId },
+        select: {
+          id: true,
+          isActive: true,
+          startsAt: true,
+          expiresAt: true,
+          usageCount: true,
+          usageLimit: true,
+          usageLimitPerCustomer: true,
+        },
+      });
+      if (!couponRow?.isActive) {
+        throw new Error('Kupon artık aktif değil.');
+      }
+      const now = new Date();
+      if (couponRow.startsAt && new Date(couponRow.startsAt) > now) {
+        throw new Error('Kupon henüz geçerli değil.');
+      }
+      if (couponRow.expiresAt && new Date(couponRow.expiresAt) < now) {
+        throw new Error('Kuponun süresi dolmuş.');
+      }
+      if (couponRow.usageLimit != null && couponRow.usageCount >= couponRow.usageLimit) {
+        throw new Error('Kupon kullanım limiti dolmuş.');
+      }
+      if (couponRow.usageLimitPerCustomer != null) {
+        const perCustomer = await prisma.order.count({
+          where: {
+            tenantId,
+            couponId,
+            customerId,
+            status: { not: 'CANCELLED' },
+          },
+        });
+        if (perCustomer >= couponRow.usageLimitPerCustomer) {
+          throw new Error('Bu kuponu kullanım limitinize ulaştınız.');
+        }
+      }
+    }
+
+    const totalDiscount = campaignDiscount + couponDiscount;
+    const shipping      = Math.max(0, Number(shippingPrice) || 0);
+    const extras        = Math.max(0, Number(extraFees) || 0);
+    const totalAmount   = Math.max(0, subtotal - totalDiscount + shipping + extras);
+    const orderNumber   = `ORD-${Date.now()}`;
+
+    const txResult = await prisma.$transaction(async (tx) => {
       await deductStock(tx, items, tenantId);
 
-      // 2. If coupon used — verify it's still valid (race condition guard)
-      //    and atomically increment usageCount
       if (couponId) {
         const coupon = await tx.coupon.findUnique({
           where:  { id: couponId },
-          select: { id: true, usageCount: true, usageLimit: true, isActive: true, expiresAt: true },
+          select: { id: true, usageCount: true, usageLimit: true, isActive: true },
         });
-
-        if (!coupon || !coupon.isActive) {
+        if (!coupon?.isActive) {
           throw new Error('Kupon artık aktif değil.');
-        }
-        if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
-          throw new Error('Kuponun süresi dolmuş.');
         }
         if (coupon.usageLimit != null && coupon.usageCount >= coupon.usageLimit) {
           throw new Error('Kupon kullanım limiti dolmuş.');
         }
-
         await tx.coupon.update({
           where: { id: couponId },
           data:  { usageCount: { increment: 1 } },
         });
       }
 
-      const totalDiscount = campaignDiscount + couponDiscount;
-      const shipping      = Math.max(0, Number(shippingPrice) || 0);
-      const extras        = Math.max(0, Number(extraFees) || 0);
-      const totalAmount   = Math.max(0, subtotal - totalDiscount + shipping + extras);
-      const orderNumber   = `ORD-${Date.now()}`;
-
-      // 3. Create the order + items (with per-item discount amounts)
-      const order = await tx.order.create({
+      const created = await tx.order.create({
         data: {
           orderNumber,
           totalAmount,
@@ -565,8 +603,8 @@ export class OrderService {
           ...(couponId ? { coupon: { connect: { id: couponId } } } : {}),
           items: {
             create: items.map((item) => {
-              const key            = `${item.productId}|${item.variantId ?? ''}`;
-              const itemDiscount   = itemDiscountMap.get(key) ?? 0;
+              const key          = `${item.productId}|${item.variantId ?? ''}`;
+              const itemDiscount = itemDiscountMap.get(key) ?? 0;
               return {
                 quantity:       item.quantity,
                 price:          item.price,
@@ -579,24 +617,32 @@ export class OrderService {
             }),
           },
         },
-        include: ORDER_INCLUDE,
+        select: { id: true },
       });
 
-      return {
-        order,
-        summary: {
-          originalTotal:    subtotal,
-          campaignDiscount,
-          couponDiscount,
-          totalDiscount,
-          finalTotal:       totalAmount,
-        },
-        appliedCampaigns: campaignResult.discounts ?? [],
-      };
+      return { orderId: created.id };
+    }, { maxWait: 10_000, timeout: 20_000 });
+
+    const order = await prisma.order.findFirst({
+      where:   { id: txResult.orderId, tenantId },
+      include: ORDER_INCLUDE,
     });
+    if (!order) {
+      throw new Error('Sipariş oluşturuldu ancak kayıt okunamadı.');
+    }
 
     logTenantUsage(tenantId, TenantUsageAction.ORDER_CREATE);
-    return result;
+    return {
+      order,
+      summary: {
+        originalTotal:    subtotal,
+        campaignDiscount,
+        couponDiscount,
+        totalDiscount,
+        finalTotal:       totalAmount,
+      },
+      appliedCampaigns: campaignResult.discounts ?? [],
+    };
   }
 
   // ── Update Status ─────────────────────────────────────────────────────────

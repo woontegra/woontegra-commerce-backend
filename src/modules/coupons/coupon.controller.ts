@@ -46,14 +46,19 @@ export class CouponController {
    */
   validate = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { code, orderAmount } = req.body;
+      const { code, orderAmount, customerId } = req.body;
       if (!code) { res.status(422).json({ error: 'Kupon kodu zorunludur.' }); return; }
       const amount = parseFloat(orderAmount);
       if (!Number.isFinite(amount) || amount < 0) {
         res.status(422).json({ error: 'Geçerli bir sipariş tutarı giriniz.' });
         return;
       }
-      const result = await this.svc.validate(code, amount, req.user!.tenantId!);
+      const result = await this.svc.validate(
+        code,
+        amount,
+        req.user!.tenantId!,
+        typeof customerId === 'string' && customerId.trim() ? customerId.trim() : undefined,
+      );
       res.json({ status: 'success', data: result });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

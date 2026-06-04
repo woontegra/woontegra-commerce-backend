@@ -312,6 +312,45 @@ export async function getStoreOrderStatus(req: Request, res: Response): Promise<
   }
 }
 
+export async function validateStoreCoupon(req: StoreCustomerAuthRequest, res: Response): Promise<void> {
+  try {
+    const tenant = await resolveStoreTenant(req);
+    if (!tenant) {
+      res.status(404).json({ success: false, error: 'Mağaza bulunamadı.' });
+      return;
+    }
+
+    const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+    const items = Array.isArray(req.body?.items) ? req.body.items : null;
+    if (!code) {
+      res.status(400).json({ success: false, error: 'Kupon kodu zorunludur.' });
+      return;
+    }
+    if (!items?.length) {
+      res.status(400).json({ success: false, error: 'Sepet ürünleri gerekli.' });
+      return;
+    }
+
+    const parsedItems = items.map((line: { productId?: string; variantId?: string | null; quantity?: number }) => ({
+      productId:  String(line.productId ?? ''),
+      variantId:  line.variantId ?? null,
+      quantity:   Number(line.quantity) || 0,
+    }));
+
+    const result = await storeOrderService.validateCoupon(
+      tenant.id,
+      code,
+      parsedItems.filter(i => i.productId && i.quantity > 0),
+      req.storeCustomer?.customerId,
+    );
+
+    res.json({ success: true, data: result });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Kupon doğrulanamadı.';
+    res.status(400).json({ success: false, error: msg });
+  }
+}
+
 export async function createStoreOrder(req: StoreCustomerAuthRequest, res: Response): Promise<void> {
   try {
     const tenant = await resolveStoreTenant(req);
@@ -348,7 +387,7 @@ export async function createStoreOrder(req: StoreCustomerAuthRequest, res: Respo
       return;
     }
     const msg = e instanceof Error ? e.message : 'Sipariş oluşturulamadı.';
-    const isClient = /bulunamadı|yetersiz|geçersiz|en az|satışa kapalı|kabul|kısıtlan/i.test(msg);
+    const isClient = /bulunamadı|yetersiz|geçersiz|en az|satışa kapalı|kabul|kısıtlan|kupon/i.test(msg);
     res.status(isClient ? 400 : 500).json({ success: false, error: msg });
   }
 }

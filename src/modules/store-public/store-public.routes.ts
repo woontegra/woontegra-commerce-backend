@@ -68,6 +68,7 @@ router.get('/sayfa/:slug', pageCtrl.getStorePageBySlug);
 router.get('/navigation-menus', getStoreNavigationMenus);
 router.get('/payments/methods', ctrl.listStorePaymentMethods);
 router.post('/shipping/calculate', shipCtrl.calculateStoreShipping);
+router.post('/coupons/validate', optionalStoreCustomer, ctrl.validateStoreCoupon);
 router.post('/orders', optionalStoreCustomer, ctrl.createStoreOrder);
 router.get('/orders/:orderNumber/status', ctrl.getStoreOrderStatus);
 router.get('/orders/:orderNumber/payment-pending', ctrl.getStoreOrderPaymentPending);

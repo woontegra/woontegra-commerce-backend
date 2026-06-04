@@ -118,6 +118,12 @@ type OrderRow = {
     provider: string;
     status:   StorePaymentSessionStatus;
   }>;
+  coupon?: {
+    id:           string;
+    code:         string;
+    discountType: string;
+    value:        unknown;
+  } | null;
 };
 
 function parseAddressBlock(block: string): AdminAddressView | null {
@@ -390,6 +396,14 @@ export function toAdminOrderJson(order: OrderRow) {
     shippingPrice:    num(order.shippingPrice),
     discountAmount:   num(order.discountAmount),
     campaignDiscount: num(order.campaignDiscount),
+    coupon:           order.coupon
+      ? {
+          id:           order.coupon.id,
+          code:         order.coupon.code,
+          discountType: order.coupon.discountType,
+          value:        num(order.coupon.value),
+        }
+      : null,
     currency:         order.currency,
     notes:            order.notes,
     createdAt:        order.createdAt,
