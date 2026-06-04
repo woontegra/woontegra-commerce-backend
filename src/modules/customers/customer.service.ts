@@ -12,6 +12,13 @@ export interface CreateCustomerDto {
   zipCode?:  string;
 }
 
+export interface UpdateCustomerDto extends Partial<CreateCustomerDto> {
+  internalNote?:   string | null;
+  isRisky?:        boolean;
+  isBlocked?:      boolean;
+  blockedReason?:  string | null;
+}
+
 export interface GetCustomersQuery {
   page?:   number;
   limit?:  number;
@@ -106,7 +113,7 @@ export class CustomerService {
     });
   }
 
-  async update(id: string, data: Partial<CreateCustomerDto>, tenantId: string) {
+  async update(id: string, data: UpdateCustomerDto, tenantId: string) {
     const existing = await prisma.customer.findFirst({ where: { id, tenantId } });
     if (!existing) throw new Error('Müşteri bulunamadı.');
 
@@ -117,7 +124,29 @@ export class CustomerService {
       if (conflict) throw new Error(`Bu e-posta adresi başka bir müşteriye ait: ${data.email}`);
     }
 
-    return prisma.customer.update({ where: { id }, data });
+    const {
+      internalNote,
+      isRisky,
+      isBlocked,
+      blockedReason,
+      ...rest
+    } = data;
+
+    const patch: Prisma.CustomerUpdateInput = { ...rest };
+
+    if (internalNote !== undefined) {
+      patch.internalNote = internalNote?.trim() ? internalNote.trim() : null;
+    }
+    if (isRisky !== undefined) patch.isRisky = isRisky;
+    if (isBlocked !== undefined) {
+      patch.isBlocked = isBlocked;
+      if (!isBlocked) patch.blockedReason = null;
+    }
+    if (blockedReason !== undefined && (isBlocked ?? existing.isBlocked)) {
+      patch.blockedReason = blockedReason?.trim() ? blockedReason.trim() : null;
+    }
+
+    return prisma.customer.update({ where: { id }, data: patch });
   }
 
   async delete(id: string, tenantId: string) {

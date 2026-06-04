@@ -220,6 +220,10 @@ model Customer {
   kvkkConsentAt       DateTime?
   marketingConsent    Boolean   @default(false)
   marketingConsentAt  DateTime?
+  internalNote        String?
+  isRisky             Boolean   @default(false)
+  isBlocked           Boolean   @default(false)
+  blockedReason       String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   tenantId     String
