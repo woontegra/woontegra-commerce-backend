@@ -150,20 +150,45 @@ export class NavigationMenuController {
         await tx.tenantNavigationMenuItem.deleteMany({ where: { menuId: record.id } });
 
         if (items.length > 0) {
-          await tx.tenantNavigationMenuItem.createMany({
-            data: items.map((item, index) => ({
-              menuId: record.id,
-              tenantId,
-              label: String(item.label).trim(),
-              linkType: normalizeLinkType(item.linkType)!,
-              targetId: item.targetId?.trim() || null,
-              url: item.url?.trim() || null,
-              parentId: item.parentId?.trim() || null,
-              sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : index,
-              isActive: item.isActive !== false,
-              openInNewTab: Boolean(item.openInNewTab),
-            })),
-          });
+          const clientKey = (item: MenuItemInput, index: number) => {
+            const id = typeof item.id === 'string' ? item.id.trim() : '';
+            return id || `__idx_${index}`;
+          };
+
+          const keyToDbId = new Map<string, string>();
+          const createdIds: string[] = [];
+
+          for (let index = 0; index < items.length; index++) {
+            const item = items[index];
+            const row = await tx.tenantNavigationMenuItem.create({
+              data: {
+                menuId: record.id,
+                tenantId,
+                label: String(item.label).trim(),
+                linkType: normalizeLinkType(item.linkType)!,
+                targetId: item.targetId?.trim() || null,
+                url: item.url?.trim() || null,
+                parentId: null,
+                sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : index,
+                isActive: item.isActive !== false,
+                openInNewTab: Boolean(item.openInNewTab),
+              },
+            });
+            createdIds.push(row.id);
+            keyToDbId.set(clientKey(item, index), row.id);
+          }
+
+          for (let index = 0; index < items.length; index++) {
+            const parentKey = items[index].parentId?.trim();
+            if (!parentKey) continue;
+            const dbParentId = keyToDbId.get(parentKey);
+            const dbChildId = createdIds[index];
+            if (!dbParentId || dbParentId === dbChildId) continue;
+            await tx.tenantNavigationMenuItem.update({
+              where: { id: dbChildId },
+              data: { parentId: dbParentId },
+            });
+          }
         }
 
         return tx.tenantNavigationMenu.findUnique({
