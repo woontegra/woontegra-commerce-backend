@@ -98,6 +98,7 @@ model Tenant {
   storefrontPages        StorefrontPage[]
   mediaAssets            MediaAsset[]
   navigationMenus        TenantNavigationMenu[]
+  contactMessages        ContactMessage[]
 
   @@map("tenants")
 }
@@ -2448,6 +2449,30 @@ model TenantNavigationMenuItem {
   @@index([menuId, sortOrder])
   @@index([tenantId])
   @@map("tenant_navigation_menu_items")
+}
+
+enum ContactMessageStatus {
+  NEW
+  READ
+  ARCHIVED
+}
+
+model ContactMessage {
+  id        String               @id @default(uuid())
+  tenantId  String
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String               @db.Text
+  status    ContactMessageStatus @default(NEW)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("contact_messages")
 }
 
 model MediaAsset {

@@ -20,8 +20,19 @@ import * as pageCtrl from './store-public-pages.controller';
 import { getStoreNavigationMenus } from '../navigation-menus/store-navigation.controller';
 import { getPublicHomeLayout } from '../storefront-builder/storefront-builder.controller';
 import { requireStoreCustomer, optionalStoreCustomer } from './store-customer-auth.middleware';
+import { submitStoreContact } from '../contact-messages/store-public-contact.controller';
+
+const contactFormLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: 'Çok fazla mesaj gönderildi. Lütfen daha sonra tekrar deneyin.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const router = Router();
+
+router.post('/contact', contactFormLimit, submitStoreContact);
 
 router.post('/auth/register', authCtrl.register);
 router.post('/auth/login', authCtrl.login);
