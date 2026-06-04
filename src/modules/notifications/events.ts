@@ -103,6 +103,14 @@ export interface MarketplaceQuestionsSyncedPayload {
   createdCount: number;
 }
 
+export interface ReturnRequestCreatedPayload {
+  tenantId:        string;
+  returnRequestId: string;
+  requestNumber:   string;
+  orderNumber:     string;
+  type:            'CANCEL_REQUEST' | 'RETURN_REQUEST';
+}
+
 // ─── Event Map ────────────────────────────────────────────────────────────────
 
 export interface AppEventMap {
@@ -118,6 +126,7 @@ export interface AppEventMap {
   USER_BANNED:              UserBannedPayload;
   TENANT_SUSPENDED:         TenantSuspendedPayload;
   MARKETPLACE_QUESTIONS_SYNCED: MarketplaceQuestionsSyncedPayload;
+  RETURN_REQUEST_CREATED:       ReturnRequestCreatedPayload;
 }
 
 export type AppEventName = keyof AppEventMap;

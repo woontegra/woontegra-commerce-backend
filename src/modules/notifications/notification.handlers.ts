@@ -4,6 +4,20 @@ import { emailService }  from './email.service';
 import { inAppService }  from './inapp.service';
 import { logger }        from '../../config/logger';
 
+function dashboardOrderLink(orderId: string): string {
+  return `/dashboard/orders/${orderId}`;
+}
+
+function orderNotificationData(
+  orderId: string,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  const link = typeof extra.link === 'string' && extra.link.trim()
+    ? extra.link.trim()
+    : dashboardOrderLink(orderId);
+  return { ...extra, link };
+}
+
 // ─── ORDER_CREATED ────────────────────────────────────────────────────────────
 
 eventBus.on('ORDER_CREATED', async (p) => {
@@ -25,7 +39,11 @@ eventBus.on('ORDER_CREATED', async (p) => {
       type:     NotificationType.ORDER_CREATED,
       title:    'Yeni Sipariş Alındı',
       message:  `#${p.orderNumber} numaralı sipariş (${p.totalAmount.toFixed(2)} ${p.currency}) oluşturuldu.`,
-      data:     { orderId: p.orderId, orderNumber: p.orderNumber, totalAmount: p.totalAmount },
+      data:     orderNotificationData(p.orderId, {
+        orderId: p.orderId,
+        orderNumber: p.orderNumber,
+        totalAmount: p.totalAmount,
+      }),
     }),
   ]);
 });
@@ -49,7 +67,11 @@ eventBus.on('ORDER_STATUS_CHANGED', async (p) => {
       type:     NotificationType.ORDER_STATUS_CHANGED,
       title:    `Sipariş Durumu: ${label}`,
       message:  `#${p.orderNumber} siparişi ${label} durumuna güncellendi.`,
-      data:     { orderId: p.orderId, newStatus: p.newStatus },
+      data:     orderNotificationData(p.orderId, {
+        orderId: p.orderId,
+        orderNumber: p.orderNumber,
+        newStatus: p.newStatus,
+      }),
     }),
   ]);
 });
@@ -231,6 +253,34 @@ eventBus.on('USER_BANNED', async (p) => {
     title:    'Kullanıcı Engellendi',
     message:  `${p.userEmail} kullanıcısı engellendi.`,
     data:     { userId: p.userId, userEmail: p.userEmail, reason: p.reason },
+  });
+});
+
+// ─── RETURN_REQUEST_CREATED ───────────────────────────────────────────────────
+
+eventBus.on('RETURN_REQUEST_CREATED', async (p) => {
+  const isCancel = p.type === 'CANCEL_REQUEST';
+  logger.info({
+    message: '[Event] RETURN_REQUEST_CREATED',
+    tenantId: p.tenantId,
+    returnRequestId: p.returnRequestId,
+    type: p.type,
+  });
+
+  await inAppService.create({
+    tenantId: p.tenantId,
+    type:     NotificationType.SYSTEM_MESSAGE,
+    title:    isCancel ? 'Yeni iptal talebi' : 'Yeni iade talebi',
+    message:  isCancel
+      ? 'Müşteri yeni bir iptal talebi oluşturdu. Talebi inceleyin.'
+      : 'Müşteri yeni bir iade talebi oluşturdu. Talebi inceleyin.',
+    data:     {
+      link:            `/dashboard/returns/${p.returnRequestId}`,
+      returnRequestId: p.returnRequestId,
+      requestNumber:   p.requestNumber,
+      orderNumber:     p.orderNumber,
+      type:            p.type,
+    },
   });
 });
 

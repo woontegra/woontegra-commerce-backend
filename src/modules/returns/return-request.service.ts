@@ -3,6 +3,7 @@ import type { OrderStatus, ReturnRequestStatus, ReturnRequestType } from '@prism
 import { OrderService } from '../orders/order.service';
 import { returnRefundService } from './return-refund.service';
 import { storeEmailService } from '../store-public/store-email.service';
+import { eventBus } from '../notifications/events';
 
 const orderService = new OrderService();
 
@@ -321,6 +322,14 @@ export class ReturnRequestService {
     });
 
     void storeEmailService.notifyReturnRequestCreated(tenantId, created.id);
+
+    eventBus.emit('RETURN_REQUEST_CREATED', {
+      tenantId,
+      returnRequestId: created.id,
+      requestNumber:   created.requestNumber,
+      orderNumber:     order.orderNumber,
+      type:            body.type,
+    });
 
     return mapReturnRequest(created as never);
   }
